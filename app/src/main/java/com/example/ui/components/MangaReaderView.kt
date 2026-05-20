@@ -24,12 +24,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.request.CachePolicy
+import java.util.UUID
 import com.example.data.MangaEntity
 import org.json.JSONArray
 
@@ -49,6 +53,8 @@ fun MangaReaderView(
     var zoomLevelText by remember { mutableStateOf("100%") }
     var showControlUi by remember { mutableStateOf(true) }
     var brightnessSetting by remember { mutableStateOf(1.0f) }
+
+    val context = LocalContext.current
 
     // Parse image page URLs from the JSON
     val pageImages = remember(manga, activeChapter) {
@@ -102,8 +108,19 @@ fun MangaReaderView(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     itemsIndexed(pageImages) { index, pageUrl ->
+                        val secureUrl = remember(pageUrl) {
+                            val uniqueId = UUID.randomUUID().toString().take(8)
+                            if (pageUrl.contains("?")) "$pageUrl&sec_tok=tmp_$uniqueId" else "$pageUrl?sec_tok=tmp_$uniqueId"
+                        }
+                        val imageRequest = remember(secureUrl) {
+                            ImageRequest.Builder(context)
+                                .data(secureUrl)
+                                .diskCachePolicy(CachePolicy.DISABLED)
+                                .memoryCachePolicy(CachePolicy.DISABLED)
+                                .build()
+                        }
                         AsyncImage(
-                            model = pageUrl,
+                            model = imageRequest,
                             contentDescription = "صفحه ${index + 1} از مانهوا ${manga.titleFa}",
                             contentScale = ContentScale.FillWidth,
                             modifier = Modifier
@@ -132,12 +149,24 @@ fun MangaReaderView(
                         .testTag("horizontal_manga_pager"),
                     reverseLayout = true // Manga is read right-to-left
                 ) { page ->
+                    val pageUrl = pageImages[page]
+                    val secureUrl = remember(pageUrl) {
+                        val uniqueId = UUID.randomUUID().toString().take(8)
+                        if (pageUrl.contains("?")) "$pageUrl&sec_tok=tmp_$uniqueId" else "$pageUrl?sec_tok=tmp_$uniqueId"
+                    }
+                    val imageRequest = remember(secureUrl) {
+                        ImageRequest.Builder(context)
+                            .data(secureUrl)
+                            .diskCachePolicy(CachePolicy.DISABLED)
+                            .memoryCachePolicy(CachePolicy.DISABLED)
+                            .build()
+                    }
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
                         AsyncImage(
-                            model = pageImages[page],
+                            model = imageRequest,
                             contentDescription = "صفحه ${page + 1} از مانهوا ${manga.titleFa}",
                             contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize()

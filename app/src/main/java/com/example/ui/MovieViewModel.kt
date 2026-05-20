@@ -45,6 +45,57 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     val teamMembers: StateFlow<List<TeamMember>> = repository.allTeamMembers
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Advanced features streams
+    private val _currentUserId = MutableStateFlow(6)
+    val currentUserId: StateFlow<Int> = _currentUserId.asStateFlow()
+
+    val userAccounts: StateFlow<List<UserAccount>> = repository.allUserAccounts
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val currentUserAccount: StateFlow<UserAccount?> = combine(userAccounts, _currentUserId) { accounts, id ->
+        accounts.find { it.id == id }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val systemSettings: StateFlow<SystemSettingsEntity> = repository.systemSettings
+        .map { it ?: SystemSettingsEntity() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SystemSettingsEntity())
+
+    val recruitmentApps: StateFlow<List<RecruitmentApplication>> = repository.allRecruitments
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val stories: StateFlow<List<StoryEntity>> = repository.allStories
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _serverVersionCode = MutableStateFlow(2) // Defaults to app version code 2
+    val serverVersionCode: StateFlow<Int> = _serverVersionCode.asStateFlow()
+
+    // Featured Slider IDs
+    private val _featuredMangaIds = MutableStateFlow(listOf(1, 2, 3))
+    val featuredMangaIds: StateFlow<List<Int>> = _featuredMangaIds.asStateFlow()
+
+    // Starts from zero configuration map per manga ID
+    private val _mangaStartsFromZero = MutableStateFlow<Map<Int, Boolean>>(emptyMap())
+    val mangaStartsFromZero: StateFlow<Map<Int, Boolean>> = _mangaStartsFromZero.asStateFlow()
+
+    // Simulating Workflow Upload states
+    data class UploadWorkflowState(
+        val translatorWordFile: String? = null,
+        val cleanerZipFile: String? = null,
+        val typesetterZipFile: String? = null,
+        val isWordDraftDeleted: Boolean = false,
+        val isCleanerZipDraftDeleted: Boolean = false,
+        val hasFinishedCompilation: Boolean = false,
+        val outputZipFileName: String? = null,
+        val chosenSequenceStart: Int = 1, // 0 or 1
+        val chapterToPublish: Int = 0
+    )
+
+    private val _uploadWorkflow = MutableStateFlow<Map<Int, UploadWorkflowState>>(emptyMap())
+    val uploadWorkflow: StateFlow<Map<Int, UploadWorkflowState>> = _uploadWorkflow.asStateFlow()
+
+    fun getPurchasedChapters(userId: Int): Flow<List<ChapterPurchaseRecord>> = repository.getPurchasedChapters(userId)
+    fun isChapterUnlocked(userId: Int, mangaId: Int, chapterNumber: Int): Flow<Boolean> = repository.isChapterUnlocked(userId, mangaId, chapterNumber)
+
     // Active VIP status based on active purchases in the database (to unlock advanced early chapters)
     val isVipActive: StateFlow<Boolean> = repository.userPurchases
         .map { list -> list.isNotEmpty() }
@@ -286,6 +337,370 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteMember(member: TeamMember) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.removeTeamMember(member)
+        }
+    }
+
+    // --- Advanced Features Interactive Methods ---
+
+    fun switchUser(userId: Int) {
+        _currentUserId.value = userId
+    }
+
+    fun updateSystemSettings(settings: SystemSettingsEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.insertSystemSettings(settings)
+        }
+    }
+
+    fun payWalletTopup(amount: Long) {
+        val user = currentUserAccount.value ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.insertUserAccount(user.copy(walletRial = user.walletRial + amount))
+        }
+    }
+
+    fun awardGiftChapters(userId: Int, count: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            userAccounts.value.find { it.id == userId }?.let { targetUser ->
+                repository.insertUserAccount(targetUser.copy(walletGiftChapters = targetUser.walletGiftChapters + count))
+            }
+        }
+    }
+
+    fun purchaseSingleChapter(mangaId: Int, chapterNumber: Int, useGiftPoints: Boolean, onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}) {
+        val user = currentUserAccount.value ?: return
+        val settings = systemSettings.value
+        val cost = settings.baseChapterPrice
+
+        viewModelScope.launch(Dispatchers.IO) {
+            if (useGiftPoints) {
+                if (user.walletGiftChapters >= 1) {
+                    val updatedUser = user.copy(walletGiftChapters = user.walletGiftChapters - 1)
+                    repository.insertUserAccount(updatedUser)
+                    repository.insertChapterPurchase(
+                        ChapterPurchaseRecord(
+                            userId = user.id,
+                            mangaId = mangaId,
+                            chapterNumber = chapterNumber,
+                            purchaseTime = System.currentTimeMillis()
+                        )
+                    )
+                    withContext(Dispatchers.Main) { onSuccess() }
+                } else {
+                    withContext(Dispatchers.Main) { onError("شما چپتر هدیه کافی در کیف پول ندارید.") }
+                }
+            } else {
+                if (user.walletRial >= cost) {
+                    val updatedUser = user.copy(walletRial = user.walletRial - cost)
+                    repository.insertUserAccount(updatedUser)
+
+                    val cleanerShare = (cost * settings.shareCleanerPct / 100).toLong()
+                    val editorShare = (cost * settings.shareEditorPct / 100).toLong()
+                    val translatorShare = (cost * settings.shareTranslatorPct / 100).toLong()
+                    val platformShare = (cost * settings.sharePlatformPct / 100).toLong()
+
+                    userAccounts.value.forEach { account ->
+                        var modifiedUser = account
+                        var updated = false
+                        if (account.id == 3) {
+                            modifiedUser = account.copy(walletRial = account.walletRial + cleanerShare)
+                            updated = true
+                        } else if (account.id == 4) {
+                            modifiedUser = account.copy(walletRial = account.walletRial + editorShare)
+                            updated = true
+                        } else if (account.id == 5) {
+                            modifiedUser = account.copy(walletRial = account.walletRial + translatorShare)
+                            updated = true
+                        } else if (account.id == 1) {
+                            modifiedUser = account.copy(walletRial = account.walletRial + platformShare)
+                            updated = true
+                        }
+
+                        if (updated) {
+                            repository.insertUserAccount(modifiedUser)
+                        }
+                    }
+
+                    repository.insertChapterPurchase(
+                        ChapterPurchaseRecord(
+                            userId = user.id,
+                            mangaId = mangaId,
+                            chapterNumber = chapterNumber,
+                            purchaseTime = System.currentTimeMillis()
+                        )
+                    )
+                    withContext(Dispatchers.Main) { onSuccess() }
+                } else {
+                    withContext(Dispatchers.Main) { onError("کیف پول ریالی شما موجودی کافی ندارد.") }
+                }
+            }
+        }
+    }
+
+    fun getBulkChaptersPrice(count: Int): Int {
+        val settings = systemSettings.value
+        val rawCost = settings.baseChapterPrice * count
+        return if (count >= 100) {
+            rawCost * (100 - settings.discountPercent100) / 100
+        } else if (count >= 50) {
+            rawCost * (100 - settings.discountPercent50) / 100
+        } else {
+            rawCost
+        }
+    }
+
+    fun purchaseBulkChapters(mangaId: Int, startChapter: Int, count: Int, onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}) {
+        val user = currentUserAccount.value ?: return
+        val discountedCost = getBulkChaptersPrice(count)
+
+        viewModelScope.launch(Dispatchers.IO) {
+            if (user.walletRial >= discountedCost) {
+                val updatedUser = user.copy(walletRial = user.walletRial - discountedCost)
+                repository.insertUserAccount(updatedUser)
+
+                val settings = systemSettings.value
+                val cleanerShare = (discountedCost * settings.shareCleanerPct / 100).toLong()
+                val editorShare = (discountedCost * settings.shareEditorPct / 100).toLong()
+                val translatorShare = (discountedCost * settings.shareTranslatorPct / 100).toLong()
+                val platformShare = (discountedCost * settings.sharePlatformPct / 100).toLong()
+
+                userAccounts.value.forEach { account ->
+                    var modifiedUser = account
+                    var updated = false
+                    if (account.id == 3) {
+                        modifiedUser = account.copy(walletRial = account.walletRial + cleanerShare)
+                        updated = true
+                    } else if (account.id == 4) {
+                        modifiedUser = account.copy(walletRial = account.walletRial + editorShare)
+                        updated = true
+                    } else if (account.id == 5) {
+                        modifiedUser = account.copy(walletRial = account.walletRial + translatorShare)
+                        updated = true
+                    } else if (account.id == 1) {
+                        modifiedUser = account.copy(walletRial = account.walletRial + platformShare)
+                        updated = true
+                    }
+
+                    if (updated) {
+                        repository.insertUserAccount(modifiedUser)
+                    }
+                }
+
+                for (ch in startChapter until (startChapter + count)) {
+                    repository.insertChapterPurchase(
+                        ChapterPurchaseRecord(
+                            userId = user.id,
+                            mangaId = mangaId,
+                            chapterNumber = ch,
+                            purchaseTime = System.currentTimeMillis()
+                        )
+                    )
+                }
+                withContext(Dispatchers.Main) { onSuccess() }
+            } else {
+                withContext(Dispatchers.Main) { onError("کیف پول ریالی شما موجودی کافی ندارد.") }
+            }
+        }
+    }
+
+    fun addStaffContribution(staffId: Int, countAdded: Int = 1) {
+        viewModelScope.launch(Dispatchers.IO) {
+            userAccounts.value.find { it.id == staffId }?.let { staff ->
+                val rewardRate = staff.customRewardRate ?: systemSettings.value.defaultStaffRewardChapters
+                val rewardedChapters = countAdded * rewardRate
+                val updatedStaff = staff.copy(
+                    walletGiftChapters = staff.walletGiftChapters + rewardedChapters,
+                    chaptersContributedThisMonth = staff.chaptersContributedThisMonth + countAdded
+                )
+                repository.insertUserAccount(updatedStaff)
+            }
+        }
+    }
+
+    fun postStory(mediaUrl: String, caption: String, onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}) {
+        val user = currentUserAccount.value ?: return
+        if (user.role == "SUPER_ADMIN" || user.storyTokens > 0) {
+            viewModelScope.launch(Dispatchers.IO) {
+                val updatedUser = if (user.role == "SUPER_ADMIN") user else user.copy(storyTokens = user.storyTokens - 1)
+                repository.insertUserAccount(updatedUser)
+
+                val story = StoryEntity(
+                    staffId = user.id,
+                    staffName = user.displayName,
+                    staffRole = user.subRole,
+                    mediaUrl = mediaUrl,
+                    caption = caption,
+                    uploadTime = System.currentTimeMillis()
+                )
+                repository.insertStory(story)
+                withContext(Dispatchers.Main) { onSuccess() }
+            }
+        } else {
+            onError("شما توکن ارسال استوری کافی ندارید! (ارسال استوری نیاز به حداقل ۴۰ فعالیت در ماه قبل دارد)")
+        }
+    }
+
+    fun deleteStory(id: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.removeStory(id)
+        }
+    }
+
+    fun simulateNewMonth() {
+        val settings = systemSettings.value
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.clearAllStories()
+
+            userAccounts.value.forEach { account ->
+                val qualified = account.chaptersContributedThisMonth >= settings.minChaptersForStoryToken
+                val awardedTokens = if (qualified) settings.storyTokensAwarded else 0
+
+                val refreshed = account.copy(
+                    storyTokens = awardedTokens,
+                    chaptersContributedLastMonth = account.chaptersContributedThisMonth,
+                    chaptersContributedThisMonth = 0
+                )
+                repository.insertUserAccount(refreshed)
+            }
+        }
+    }
+
+    fun applyForRecruitment(fullName: String, messengerId: String, specialty: String, onSuccess: () -> Unit = {}) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = RecruitmentApplication(
+                fullName = fullName,
+                messengerId = messengerId,
+                specialty = specialty,
+                testFileName = "فایل_خام_تست_${specialty}.zip",
+                uploadedWorkName = "پاسخ_تست_کاربر_${fullName}.zip",
+                status = "PENDING",
+                dateSubmitted = "امروز"
+            )
+            repository.insertRecruitment(app)
+            withContext(Dispatchers.Main) { onSuccess() }
+        }
+    }
+
+    fun reviewRecruitment(app: RecruitmentApplication, approve: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val newStatus = if (approve) "APPROVED" else "REJECTED"
+            repository.insertRecruitment(app.copy(status = newStatus))
+
+            if (approve) {
+                val guest = userAccounts.value.find { it.id == 6 }
+                if (guest != null) {
+                    val upgraded = guest.copy(
+                        displayName = app.fullName,
+                        role = "STAFF",
+                        subRole = app.specialty,
+                        storyTokens = 2
+                    )
+                    repository.insertUserAccount(upgraded)
+                }
+            }
+        }
+    }
+
+    fun updateServerVersionCode(code: Int) {
+        _serverVersionCode.value = code
+    }
+
+    fun toggleFeaturedManga(mangaId: Int) {
+        val currentList = _featuredMangaIds.value.toMutableList()
+        if (currentList.contains(mangaId)) {
+            currentList.remove(mangaId)
+        } else {
+            currentList.add(mangaId)
+        }
+        _featuredMangaIds.value = currentList
+    }
+
+    fun setMangaStartsFromZero(mangaId: Int, startsFromZero: Boolean) {
+        val currentMap = _mangaStartsFromZero.value.toMutableMap()
+        currentMap[mangaId] = startsFromZero
+        _mangaStartsFromZero.value = currentMap
+    }
+
+    fun uploadWorkflowProgress(mangaId: Int, fileType: String, fileName: String) {
+        val currentMap = _uploadWorkflow.value.toMutableMap()
+        val currentState = currentMap[mangaId] ?: UploadWorkflowState()
+        val newState = when (fileType) {
+            "WORD" -> currentState.copy(translatorWordFile = fileName, isWordDraftDeleted = false)
+            "CLEANER_ZIP" -> currentState.copy(cleanerZipFile = fileName, isCleanerZipDraftDeleted = false)
+            "EDITOR_ZIP" -> currentState.copy(typesetterZipFile = fileName, hasFinishedCompilation = false)
+            else -> currentState
+        }
+        currentMap[mangaId] = newState
+        _uploadWorkflow.value = currentMap
+    }
+
+    fun approveAndPublishWorkflow(mangaId: Int, chapterNumber: Int, sequenceStart: Int) {
+        val currentMap = _uploadWorkflow.value.toMutableMap()
+        val currentState = currentMap[mangaId] ?: UploadWorkflowState()
+        
+        val newState = currentState.copy(
+            isWordDraftDeleted = true,
+            isCleanerZipDraftDeleted = true,
+            hasFinishedCompilation = true,
+            outputZipFileName = "compiled_chapter_${chapterNumber}_images_sequenced.zip",
+            chosenSequenceStart = sequenceStart,
+            chapterToPublish = chapterNumber
+        )
+        currentMap[mangaId] = newState
+        _uploadWorkflow.value = currentMap
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = repository.allMangas.first()
+            val manga = list.find { it.id == mangaId } ?: return@launch
+            
+            val updatedManga = manga.copy(
+                chaptersCount = maxOf(manga.chaptersCount + 1, chapterNumber),
+                pagesJson = """[
+                    "https://picsum.photos/id/1010/800/1200",
+                    "https://picsum.photos/id/1011/800/1200",
+                    "https://picsum.photos/id/1012/800/1200",
+                    "https://picsum.photos/id/1013/800/1200"
+                ]"""
+            )
+            repository.updateManga(updatedManga)
+            
+            val user = currentUserAccount.value
+            if (user != null && user.role == "STAFF") {
+                repository.insertUserAccount(user.copy(walletGiftChapters = user.walletGiftChapters + 5))
+            }
+        }
+    }
+
+    fun deleteOrReplaceChapter(mangaId: Int, chapterNumber: Int, isReplace: Boolean, customPages: List<String> = emptyList()) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = repository.allMangas.first()
+            val manga = list.find { it.id == mangaId } ?: return@launch
+            val updatedManga = if (isReplace) {
+                val mockPages = if (customPages.isNotEmpty()) customPages else listOf(
+                    "https://picsum.photos/id/1021/800/1200",
+                    "https://picsum.photos/id/1022/800/1200",
+                    "https://picsum.photos/id/1023/800/1200"
+                )
+                manga.copy(pagesJson = org.json.JSONArray(mockPages).toString())
+            } else {
+                manga.copy(chaptersCount = maxOf(1, manga.chaptersCount - 1))
+            }
+            repository.updateManga(updatedManga)
+        }
+    }
+
+    fun updateMangaDetails(mangaId: Int, titleFa: String, titleEn: String, descriptionFa: String, coverUrl: String, bannerUrl: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = repository.allMangas.first()
+            val manga = list.find { it.id == mangaId } ?: return@launch
+            val updatedManga = manga.copy(
+                titleFa = titleFa,
+                titleEn = titleEn,
+                descriptionFa = descriptionFa,
+                coverUrl = coverUrl,
+                bannerUrl = bannerUrl
+            )
+            repository.updateManga(updatedManga)
         }
     }
 

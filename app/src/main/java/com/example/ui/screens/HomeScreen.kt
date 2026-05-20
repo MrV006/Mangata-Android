@@ -32,6 +32,12 @@ import com.example.ui.MovieViewModel
 import com.example.ui.components.GeminiReviewSummary
 import com.example.ui.components.MangaReaderView
 import com.example.ui.components.MyketPurchaseDialog
+import com.example.ui.components.StoryViewerTray
+import com.example.ui.components.RecruitmentPortalCard
+import com.example.ui.components.StaffDashboard
+import com.example.ui.components.AdminPanel
+import com.example.ui.components.ForcedUpdateScreen
+import com.example.ui.components.ChapterUnlockDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,6 +50,14 @@ fun HomeScreen(viewModel: MovieViewModel) {
     val selectedManga by viewModel.selectedManga.collectAsState()
     val showMyketBilling by viewModel.showMyketBillingDialog.collectAsState()
     val selectedSkuToBuy by viewModel.selectedSkuToBuy.collectAsState()
+
+    val serverVersionCode by viewModel.serverVersionCode.collectAsState()
+    if (serverVersionCode > 2) {
+        ForcedUpdateScreen(onDownloadUpdate = {
+            viewModel.updateServerVersionCode(2)
+        })
+        return
+    }
 
     val darkBackground = Color(0xFF0F1115)
     val accentGold = Color(0xFFFFD700)
@@ -269,6 +283,9 @@ fun LibraryDashboard(viewModel: MovieViewModel) {
             }
         }
 
+        // Circular Live Stories highlight tray curated by Translators / Editors
+        StoryViewerTray(viewModel = viewModel)
+
         // Search text field
         TextField(
             value = searchQuery,
@@ -330,16 +347,44 @@ fun LibraryDashboard(viewModel: MovieViewModel) {
             }
         }
 
-        // Top Banner slider (Featured hero title like Solo Leveling)
-        if (mangas.isNotEmpty() && searchQuery.isEmpty()) {
-            val featuredManga = mangas.first()
-            Text(
-                "داغ‌ترین اثر این هفته",
-                color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
-            )
+        // Smart Recruitment Portal Entrance for New Staff Translators / Cleaners
+        RecruitmentPortalCard(viewModel = viewModel)
+
+        // Top Banner slider (Featured hero titles dynamic carousel selected by Super Admin)
+        val featuredIds by viewModel.featuredMangaIds.collectAsState()
+        val featuredMangas = mangas.filter { featuredIds.contains(it.id) }
+
+        if (featuredMangas.isNotEmpty() && searchQuery.isEmpty()) {
+            var activeSliderIndex by remember { mutableStateOf(0) }
+            // Safe index check
+            val indexToUse = if (activeSliderIndex >= featuredMangas.size) 0 else activeSliderIndex
+            val featuredManga = featuredMangas[indexToUse]
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Interactive dot indicators
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    featuredMangas.forEachIndexed { idx, _ ->
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(if (idx == indexToUse) Color(0xFFFFD700) else Color.Gray)
+                                .clickable { activeSliderIndex = idx }
+                        )
+                    }
+                }
+
+                Text(
+                    "داغ‌ترین آثار در اسلایدر ویژه",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
 
             Box(
                 modifier = Modifier
@@ -367,10 +412,35 @@ fun LibraryDashboard(viewModel: MovieViewModel) {
                         )
                 )
 
+                // Chevron Arrows to slide easily
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            activeSliderIndex = if (indexToUse == 0) featuredMangas.size - 1 else indexToUse - 1
+                        },
+                        modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp)).size(32.dp)
+                    ) {
+                        Icon(Icons.Default.KeyboardArrowLeft, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+
+                    IconButton(
+                        onClick = {
+                            activeSliderIndex = if (indexToUse == featuredMangas.size - 1) 0 else indexToUse + 1
+                        },
+                        modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp)).size(32.dp)
+                    ) {
+                        Icon(Icons.Default.KeyboardArrowRight, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+                }
+
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp),
+                        .padding(bottom = 16.dp, start = 16.dp, end = 16.dp),
                     verticalArrangement = Arrangement.Bottom,
                     horizontalAlignment = Alignment.End
                 ) {
@@ -399,7 +469,7 @@ fun LibraryDashboard(viewModel: MovieViewModel) {
                     Text(
                         text = featuredManga.titleFa,
                         color = Color.White,
-                        fontSize = 20.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Black
                     )
                     Text(
@@ -638,7 +708,9 @@ fun BookmarksDashboard(viewModel: MovieViewModel) {
 @Composable
 fun CollaboratorsDashboard(viewModel: MovieViewModel) {
     val teamMembers by viewModel.teamMembers.collectAsState()
-    val mangas by viewModel.mangas.collectAsState()
+    val currentUser by viewModel.currentUserAccount.collectAsState()
+
+    var activeSubTab by remember { mutableStateOf(0) } // 0 = Team Directory, 1 = My Workspace
 
     var showAddForm by remember { mutableStateOf(false) }
     var inputName by remember { mutableStateOf("") }
@@ -652,184 +724,260 @@ fun CollaboratorsDashboard(viewModel: MovieViewModel) {
             .padding(horizontal = 20.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.End
     ) {
+        // Toggle tabs
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Button(
-                onClick = { showAddForm = !showAddForm },
-                colors = ButtonDefaults.buttonColors(containerColor = if (showAddForm) Color(0xFFFF5252) else Color(0xFF0055B3)),
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Text(if (showAddForm) "بستن فرم" else "+ همکار جدید", fontSize = 11.sp, color = Color.White)
-            }
-
-            Text(
-                "پنل هماهنگی همکاران تیم",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Black
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // New member addition form
-        if (showAddForm) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF16191E)),
-                border = BorderStroke(1.dp, Color(0xFF2D3139)),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    horizontalAlignment = Alignment.End
+            listOf("میز کار من", "لیست اعضا").forEachIndexed { index, label ->
+                val realIndex = 1 - index // Persian RTL Mapping
+                val isSelected = activeSubTab == realIndex
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isSelected) Color(0xFF0055B3) else Color(0xFF16191E))
+                        .clickable { activeSubTab = realIndex }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("ثبت عضو جدید در کادر ترجمه", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = inputName,
-                        onValueChange = { inputName = it },
-                        label = { Text("نام همکار") },
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
-                        modifier = Modifier.fillMaxWidth()
+                    Text(
+                        text = label,
+                        color = if (isSelected) Color.White else Color.LightGray,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
                     )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = inputRole,
-                        onValueChange = { inputRole = it },
-                        label = { Text("سمت (مثال: مترجم، کلینر، تایپیست)") },
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = inputWorks,
-                        onValueChange = { inputWorks = it },
-                        label = { Text("مانهواهای تحت تخصیص") },
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Button(
-                        onClick = {
-                            if (inputName.isNotEmpty()) {
-                                viewModel.addNewTeamMember(inputName, inputRole, inputWorks, inputLevel)
-                                inputName = ""
-                                inputWorks = ""
-                                showAddForm = false
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF59B259)),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("افزودن همکار به کادر تیم", color = Color.White)
-                    }
                 }
             }
         }
 
-        // Help text
-        Text(
-            "ادمین ها و کادر ترجمه مسئول کنترل کیفیت ادیت، ترجمه و پاکسازی (Cleaning) پنل‌های مانیتور هستند.",
-            color = Color.Gray,
-            fontSize = 11.sp,
-            textAlign = TextAlign.Right,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
-
-        // Collaborators list view
-        Box(modifier = Modifier.fillMaxSize().weight(1f)) {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                teamMembers.forEach { member ->
-                    Card(
+        if (activeSubTab == 1) {
+            // My Workspace for Staff Members
+            currentUser?.let { user ->
+                if (user.role == "SUPER_ADMIN" || user.role == "STAFF" || user.role == "DEPT_ADMIN") {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        StaffDashboard(viewModel = viewModel)
+                    }
+                } else {
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF16191E)),
-                        border = BorderStroke(1.dp, Color(0xFF2D3139)),
-                        shape = RoundedCornerShape(12.dp)
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Row(
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "قفل",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(56.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "بخش همکاران قفل است",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "شما با موفقیت به عنوان خواننده (مهمان یا عادی) احراز هویت شده‌اید. برای تست هوشمند پنل ثبت گزارش و واگذاری جوایز، لطفا یکی از کارهای زیر را انجام دهید:\n\n۱. رول فعال خود را از تنظیمات به کادر ترجمه تغییر دهید.\n۲. از پورتال استخدام ثبت‌نام فرستاده و منتظر قبولی مدیریت بمانید.",
+                            color = Color.LightGray,
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+            }
+        } else {
+            // Team list directory (Original screen preserved but visualised elegantly)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Add button only for managers/admins
+                val userRole = currentUser?.role ?: ""
+                if (userRole == "SUPER_ADMIN" || userRole == "DEPT_ADMIN") {
+                    Button(
+                        onClick = { showAddForm = !showAddForm },
+                        colors = ButtonDefaults.buttonColors(containerColor = if (showAddForm) Color(0xFFFF5252) else Color(0xFF0055B3)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(if (showAddForm) "بستن فرم" else "+ همکار جدید", fontSize = 11.sp, color = Color.White)
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(1.dp))
+                }
+
+                Text(
+                    "پنل هماهنگی همکاران تیم",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Black
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // New member addition form
+            if (showAddForm) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF16191E)),
+                    border = BorderStroke(1.dp, Color(0xFF2D3139)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text("ثبت عضو جدید در کادر ترجمه", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = inputName,
+                            onValueChange = { inputName = it },
+                            label = { Text("نام همکار") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = inputRole,
+                            onValueChange = { inputRole = it },
+                            label = { Text("سمت (مثال: مترجم، کلینر، تایپیست)") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = inputWorks,
+                            onValueChange = { inputWorks = it },
+                            label = { Text("مانهواهای تحت تخصیص") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = {
+                                if (inputName.isNotEmpty()) {
+                                    viewModel.addNewTeamMember(inputName, inputRole, inputWorks, inputLevel)
+                                    inputName = ""
+                                    inputWorks = ""
+                                    showAddForm = false
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF59B259)),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("افزودن همکار به کادر تیم", color = Color.White)
+                        }
+                    }
+                }
+            }
+
+            // Help text
+            Text(
+                "ادمین ها و کادر ترجمه مسئول کنترل کیفیت ادیت، ترجمه و پاکسازی (Cleaning) پنل‌های مانیتور هستند.",
+                color = Color.Gray,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            // Collaborators list view
+            Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    teamMembers.forEach { member ->
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF16191E)),
+                            border = BorderStroke(1.dp, Color(0xFF2D3139)),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            // Left actions: Delete or permissions
-                            if (member.levelCode > 1) {
-                                IconButton(onClick = { viewModel.deleteMember(member) }) {
-                                    Icon(Icons.Default.RemoveCircleOutline, contentDescription = "حذف همکار", tint = Color(0xFFFF5252))
-                                }
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .background(Color(0xFF003366), RoundedCornerShape(6.dp))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                                ) {
-                                    Text("دسترسی کل", color = Color(0xFFA8C7FA), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-
-                            // Right details RTL
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                // Left actions: Delete or permissions
+                                val userRole = currentUser?.role ?: ""
+                                if (member.levelCode > 1 && (userRole == "SUPER_ADMIN" || userRole == "DEPT_ADMIN")) {
+                                    IconButton(onClick = { viewModel.deleteMember(member) }) {
+                                        Icon(Icons.Default.RemoveCircleOutline, contentDescription = "حذف همکار", tint = Color(0xFFFF5252))
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .background(Color(0xFF003366), RoundedCornerShape(6.dp))
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .background(
-                                                    if (member.roleFa.contains("مترجم")) Color(0xFF0072FF)
-                                                    else if (member.roleFa.contains("کلینر")) Color(0xFFE53935)
-                                                    else Color(0xFF59B259),
-                                                    RoundedCornerShape(4.dp)
-                                                )
-                                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                                        Text("دسترسی کل", color = Color(0xFFA8C7FA), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                // Right details RTL
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
-                                            Text(member.roleFa, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(
+                                                        if (member.roleFa.contains("مترجم")) Color(0xFF0072FF)
+                                                        else if (member.roleFa.contains("کلینر")) Color(0xFFE53935)
+                                                        else Color(0xFF59B259),
+                                                        RoundedCornerShape(4.dp)
+                                                    )
+                                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(member.roleFa, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            Text(member.name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                         }
 
-                                        Text(member.name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "پروژه‌ها: ${member.assignedWorks}",
+                                            color = Color.LightGray,
+                                            fontSize = 11.sp,
+                                            textAlign = TextAlign.Right
+                                        )
                                     }
 
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "پروژه‌ها: ${member.assignedWorks}",
-                                        color = Color.LightGray,
-                                        fontSize = 11.sp,
-                                        textAlign = TextAlign.Right
-                                    )
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .background(Color(0xFF23262B), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = member.name.take(1),
-                                        color = Color.White,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .background(Color(0xFF23262B), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = member.name.take(1),
+                                            color = Color.White,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1119,6 +1267,75 @@ fun SettingsDashboard(viewModel: MovieViewModel) {
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Simulated Account Switcher for Evaluators to verify scenarios
+        Text(
+            "شبیه‌ساز هویت و رول کاربر (محیط آزمون دمو)",
+            color = Color.White,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
+
+        Text(
+            "بین رول‌های زیر جابجا شده و تغییر درهای بسته‌شده، پنل همکاران، تقسیم درآمدها و قفل‌های چپترها را بلادرنگ امتحان کنید:",
+            color = Color.Gray,
+            fontSize = 11.sp,
+            textAlign = TextAlign.Right,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        val userAccounts by viewModel.userAccounts.collectAsState()
+        val currentUserAccount by viewModel.currentUserAccount.collectAsState()
+
+        userAccounts.forEach { account ->
+            val isSelected = currentUserAccount?.id == account.id
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clickable { viewModel.switchUser(account.id) },
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isSelected) Color(0xFF132235) else Color(0xFF16191E)
+                ),
+                border = BorderStroke(1.dp, if (isSelected) Color(0xFF00C6FF) else Color(0xFF2D3139)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isSelected) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(8.dp).background(Color(0xFF59B259), CircleShape))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("کاربر فعال شما", color = Color(0xFF59B259), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Text("کلیک جهت فعال‌سازی رول", color = Color.Gray, fontSize = 9.sp)
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(account.displayName, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("سمت: ${account.subRole}", color = Color.LightGray, fontSize = 11.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("اعتبار: ${account.walletRial} تومان", color = Color(0xFFFFD700), fontSize = 9.sp)
+                            Text("کوپن: ${account.walletGiftChapters} عدد", color = Color(0xFF00C6FF), fontSize = 9.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        currentUserAccount?.let { user ->
+            if (user.role == "SUPER_ADMIN" || user.role == "DEPT_ADMIN") {
+                Spacer(modifier = Modifier.height(24.dp))
+                AdminPanel(viewModel = viewModel)
+            }
+        }
     }
 }
 
@@ -1133,6 +1350,17 @@ fun MangaDetailOverlay(
     val isBookmarked by viewModel.isBookmarked(manga.id).collectAsState(false)
     val readHistory by viewModel.getHistoryForManga(manga.id).collectAsState(null)
     val aiSummary by viewModel.aiSummaryState.collectAsState()
+    val startsFromZeroMap by viewModel.mangaStartsFromZero.collectAsState()
+    val startsFromZero = startsFromZeroMap[manga.id] ?: false
+
+    val currentUser by viewModel.currentUserAccount.collectAsState()
+    val purchasedList by if (currentUser != null) {
+        viewModel.getPurchasedChapters(currentUser!!.id).collectAsState(initial = emptyList())
+    } else {
+        remember { mutableStateOf(emptyList()) }
+    }
+
+    var unlockDialogChapterNumber by remember { mutableStateOf<Int?>(null) }
 
     Column(
         modifier = Modifier
@@ -1305,16 +1533,25 @@ fun MangaDetailOverlay(
             )
 
             // Chapter items rendering
-            // Chapters 1 to 3 are FREE. Chapters > 3 are locked VIP early release
-            for (ch in 1..8) {
+            // Chapters 1 to 3 are FREE. Chapters > 3 are locked VIP early release unless purchased
+            val startCh = if (startsFromZero) 0 else 1
+            val endCh = if (startsFromZero) 7 else 8
+            for (ch in startCh..endCh) {
                 val isPremiumChapter = ch > 3
-                val isUnlocked = !isPremiumChapter || isVipActive
+                val isPurchased = purchasedList.any { it.mangaId == manga.id && it.chapterNumber == ch }
+                val isUnlocked = !isPremiumChapter || isVipActive || isPurchased
 
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
-                        .clickable { viewModel.openReader(manga, ch) },
+                        .clickable {
+                            if (isUnlocked) {
+                                viewModel.openReader(manga, ch)
+                            } else {
+                                unlockDialogChapterNumber = ch
+                            }
+                        },
                     colors = CardDefaults.cardColors(
                         containerColor = if (isUnlocked) Color(0xFF1D2024) else Color(0xFF16191E)
                     ),
@@ -1329,13 +1566,23 @@ fun MangaDetailOverlay(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (isUnlocked) {
-                            Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = Color.LightGray)
+                            if (isPurchased) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text("خریداری شده", color = Color(0xFF59B259), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Icon(Icons.Default.LockOpen, contentDescription = "آزاد شده", tint = Color(0xFF59B259), modifier = Modifier.size(14.dp))
+                                }
+                            } else {
+                                Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = Color.LightGray)
+                            }
                         } else {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Text("عضویت VIP مایکت", color = Color(0xFFFFD700), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("خرید تک چپتر / VIP مایکت", color = Color(0xFFFFD700), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 Icon(Icons.Default.Lock, contentDescription = "قفل", tint = Color(0xFFFFD700), modifier = Modifier.size(14.dp))
                             }
                         }
@@ -1349,6 +1596,19 @@ fun MangaDetailOverlay(
                     }
                 }
             }
+
+            unlockDialogChapterNumber?.let { chapNum ->
+                ChapterUnlockDialog(
+                    mangaId = manga.id,
+                    chapterNumber = chapNum,
+                    viewModel = viewModel,
+                    onDismiss = { unlockDialogChapterNumber = null },
+                    onUnlockSuccess = {
+                        viewModel.openReader(manga, chapNum)
+                    }
+                )
+            }
+
             Spacer(modifier = Modifier.height(30.dp))
         }
     }

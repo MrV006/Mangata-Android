@@ -52,6 +52,33 @@ class MangaRepository(private val mangaDao: MangaDao) {
         mangaDao.deleteTeamMember(member)
     }
 
+    suspend fun updateManga(manga: MangaEntity) {
+        mangaDao.insertMangas(listOf(manga))
+    }
+
+    // --- Advanced Features Repository ---
+
+    val allUserAccounts: Flow<List<UserAccount>> = mangaDao.getAllUserAccounts()
+    fun getUserAccountById(id: Int): Flow<UserAccount?> = mangaDao.getUserAccountById(id)
+    suspend fun insertUserAccount(user: UserAccount) = mangaDao.insertUserAccount(user)
+
+    val systemSettings: Flow<SystemSettingsEntity?> = mangaDao.getSystemSettings()
+    suspend fun insertSystemSettings(settings: SystemSettingsEntity) = mangaDao.insertSystemSettings(settings)
+
+    val allRecruitments: Flow<List<RecruitmentApplication>> = mangaDao.getAllRecruitments()
+    suspend fun insertRecruitment(app: RecruitmentApplication) = mangaDao.insertRecruitment(app)
+    suspend fun removeRecruitment(id: Int) = mangaDao.deleteRecruitment(id)
+
+    val allStories: Flow<List<StoryEntity>> = mangaDao.getAllStories()
+    suspend fun insertStory(story: StoryEntity) = mangaDao.insertStory(story)
+    suspend fun removeStory(id: Int) = mangaDao.deleteStory(id)
+    suspend fun pruneEndedStories(expiryTime: Long) = mangaDao.pruneStories(expiryTime)
+    suspend fun clearAllStories() = mangaDao.clearAllStories()
+
+    fun getPurchasedChapters(userId: Int): Flow<List<ChapterPurchaseRecord>> = mangaDao.getPurchasedChapters(userId)
+    fun isChapterUnlocked(userId: Int, mangaId: Int, chapterNumber: Int): Flow<Boolean> = mangaDao.isChapterUnlocked(userId, mangaId, chapterNumber)
+    suspend fun insertChapterPurchase(record: ChapterPurchaseRecord) = mangaDao.insertChapterPurchase(record)
+
     suspend fun seedDatabase() {
         // Only seed if empty
         val seedMangas = listOf(
@@ -207,5 +234,20 @@ class MangaRepository(private val mangaDao: MangaDao) {
             TeamMember(name = "نازنین راد", roleFa = "مترجم زبان کره‌ای", levelCode = 3, assignedWorks = "سولو لولینگ", rating = 4.9)
         )
         seedTeam.forEach { mangaDao.insertTeamMember(it) }
+
+        // Seed system settings
+        val defaultSettings = SystemSettingsEntity()
+        mangaDao.insertSystemSettings(defaultSettings)
+
+        // Seed user accounts (Super Admin, Dept Admin, Staff, and Readers)
+        val seedUsers = listOf(
+            UserAccount(id = 1, username = "god_admin", displayName = "امیررضا (مدیر کل)", role = "SUPER_ADMIN", subRole = "مدیر کل", walletRial = 50000, walletGiftChapters = 999, chaptersContributedLastMonth = 0, chaptersContributedThisMonth = 0, storyTokens = 10),
+            UserAccount(id = 2, username = "dept_editor", displayName = "مهدی خسروی", role = "DEPT_ADMIN", subRole = "مدیر ترجمه", walletRial = 15000, walletGiftChapters = 20, chaptersContributedLastMonth = 45, chaptersContributedThisMonth = 0, storyTokens = 2),
+            UserAccount(id = 3, username = "staff_cleaner", displayName = "سینا زارع", role = "STAFF", subRole = "کلینر", walletRial = 2400, walletGiftChapters = 12, chaptersContributedLastMonth = 52, chaptersContributedThisMonth = 0, storyTokens = 2),
+            UserAccount(id = 4, username = "staff_editor", displayName = "تینا مهدوی", role = "STAFF", subRole = "تایپیست/ادیتور", walletRial = 3600, walletGiftChapters = 8, chaptersContributedLastMonth = 41, chaptersContributedThisMonth = 0, storyTokens = 2),
+            UserAccount(id = 5, username = "staff_translator", displayName = "نازنین راد", role = "STAFF", subRole = "مترجم", walletRial = 1200, walletGiftChapters = 5, chaptersContributedLastMonth = 38, chaptersContributedThisMonth = 0, storyTokens = 0),
+            UserAccount(id = 6, username = "guest_user", displayName = "کاربر مهمان", role = "NORMAL_USER", subRole = "کاربر عادی", walletRial = 4800, walletGiftChapters = 3, chaptersContributedLastMonth = 0, chaptersContributedThisMonth = 0, storyTokens = 0)
+        )
+        seedUsers.forEach { mangaDao.insertUserAccount(it) }
     }
 }

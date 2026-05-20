@@ -66,4 +66,65 @@ interface MangaDao {
 
     @Query("DELETE FROM user_purchases")
     suspend fun clearPurchases()
+
+    // --- Advanced Features DAO ---
+
+    // User Accounts queries
+    @Query("SELECT * FROM user_accounts")
+    fun getAllUserAccounts(): Flow<List<UserAccount>>
+
+    @Query("SELECT * FROM user_accounts WHERE id = :id")
+    fun getUserAccountById(id: Int): Flow<UserAccount?>
+
+    @Query("SELECT * FROM user_accounts WHERE id = :id")
+    suspend fun getUserAccountByIdOneShot(id: Int): UserAccount?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertUserAccount(user: UserAccount)
+
+    // System Settings queries
+    @Query("SELECT * FROM system_settings WHERE id = 1")
+    fun getSystemSettings(): Flow<SystemSettingsEntity?>
+
+    @Query("SELECT * FROM system_settings WHERE id = 1")
+    suspend fun getSystemSettingsOneShot(): SystemSettingsEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSystemSettings(settings: SystemSettingsEntity)
+
+    // Recruitment queries
+    @Query("SELECT * FROM recruitment_applications ORDER BY id DESC")
+    fun getAllRecruitments(): Flow<List<RecruitmentApplication>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRecruitment(app: RecruitmentApplication)
+
+    @Query("DELETE FROM recruitment_applications WHERE id = :id")
+    suspend fun deleteRecruitment(id: Int)
+
+    // Story queries
+    @Query("SELECT * FROM webtoon_stories ORDER BY uploadTime DESC")
+    fun getAllStories(): Flow<List<StoryEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStory(story: StoryEntity)
+
+    @Query("DELETE FROM webtoon_stories WHERE id = :id")
+    suspend fun deleteStory(id: Int)
+
+    @Query("DELETE FROM webtoon_stories WHERE uploadTime < :expiryTime")
+    suspend fun pruneStories(expiryTime: Long)
+
+    @Query("DELETE FROM webtoon_stories")
+    suspend fun clearAllStories()
+
+    // Chapter Unlock queries
+    @Query("SELECT * FROM chapter_purchase_records WHERE userId = :userId")
+    fun getPurchasedChapters(userId: Int): Flow<List<ChapterPurchaseRecord>>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM chapter_purchase_records WHERE userId = :userId AND mangaId = :mangaId AND chapterNumber = :chapterNumber)")
+    fun isChapterUnlocked(userId: Int, mangaId: Int, chapterNumber: Int): Flow<Boolean>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertChapterPurchase(record: ChapterPurchaseRecord)
 }

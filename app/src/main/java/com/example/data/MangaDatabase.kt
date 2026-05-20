@@ -11,7 +11,12 @@ import androidx.room.RoomDatabase
         ReadHistory::class,
         Bookmark::class,
         TeamMember::class,
-        UserPurchase::class
+        UserPurchase::class,
+        UserAccount::class,
+        SystemSettingsEntity::class,
+        RecruitmentApplication::class,
+        StoryEntity::class,
+        ChapterPurchaseRecord::class
     ],
     version = 1,
     exportSchema = false
