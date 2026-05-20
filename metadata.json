@@ -1,0 +1,6 @@
+{
+  "name": "Mangata",
+  "description": "اپلیکیشن فوق تخصصی و مدرن خواندن مانهوا، مانها و مانگا مانگاتا (Mangata) همراه با سیستم اتصال پویا به دامنه سایت شما، پلیر خوانش پیشرفته وب‌تون و پنل مدیریت و هماهنگی تیم ترجمه.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
