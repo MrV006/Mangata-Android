@@ -1,0 +1,475 @@
+/*
+Theme Name: Mangata Elegant Dark
+Theme URI: https://mr-v.ir/mangata
+Description: قالب فوق‌العاده مدرن و اختصاصی مانگاتا برای خوانش مانهوا، مانگا و مانها با طراحی تیره شیک (Elegant Dark)، پنل وب‌تون‌خوان حرفه‌ای و سازگاری کامل با تم هماهنگ اپلیکیشن اندروید.
+Version: 1.0.0
+Author: Mangata Dev Team
+Author URI: https://mr-v.ir
+Text Domain: mangata
+Domain Path: /languages
+*/
+
+/* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: #0F1115;
+    color: #E2E2E6;
+    direction: rtl;
+    text-align: right;
+    line-height: 1.6;
+    font-size: 15px;
+    overflow-x: hidden;
+}
+
+a {
+    color: #A8C7FA;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+a:hover {
+    color: #00C6FF;
+}
+
+/* Header Styles */
+.mangata-header {
+    background: linear-gradient(to bottom, rgba(20, 23, 27, 0.95), rgba(15, 17, 21, 0.95));
+    border-bottom: 1.5px solid #2D3139;
+    padding: 15px 5%;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.brand-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand-logo-m {
+    background: linear-gradient(135deg, #00C6FF, #0072FF);
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 20px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(0, 114, 255, 0.3);
+}
+
+.brand-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: 0.5px;
+}
+
+.nav-links {
+    display: flex;
+    gap: 20px;
+    list-style: none;
+    align-items: center;
+}
+
+.nav-links a {
+    color: #C3C7CF;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    transition: all 0.25s ease;
+}
+
+.nav-links a:hover, .nav-links .active-nav {
+    color: #ffffff;
+    background-color: #1D2024;
+}
+
+.vip-badge-btn {
+    background: linear-gradient(135deg, #ffd700, #ffa500);
+    color: #101216 !important;
+    font-weight: 800 !important;
+    font-size: 13px;
+    padding: 8px 16px !important;
+    border-radius: 10px !important;
+    box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+}
+
+.vip-badge-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(255, 215, 0, 0.5);
+}
+
+/* Featured Hero Baner */
+.featured-hero-banner {
+    position: relative;
+    width: 100%;
+    height: 420px;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: flex-end;
+    border-bottom: 1px solid #2D3139;
+}
+
+.featured-hero-banner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, rgba(15, 17, 21, 0.2) 20%, rgba(15, 17, 21, 0.95) 100%);
+}
+
+.hero-content {
+    position: relative;
+    z-index: 10;
+    width: 90%;
+    margin: 0 auto 30px auto;
+}
+
+.type-tag {
+    background-color: #E21B5A;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 10px;
+}
+
+.rating-tag {
+    background-color: #59B259;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 10px;
+    margin-right: 8px;
+}
+
+.hero-title {
+    font-size: 32px;
+    font-weight: 900;
+    color: #ffffff;
+    margin-bottom: 10px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+}
+
+.hero-meta {
+    font-size: 13px;
+    color: #C3C7CF;
+    margin-bottom: 15px;
+}
+
+/* Grid & Catalog list */
+.main-container {
+    width: 90%;
+    max-width: 1200px;
+    margin: 40px auto;
+}
+
+.section-head {
+    font-size: 20px;
+    font-weight: 800;
+    color: #ffffff;
+    margin-bottom: 24px;
+    border-right: 4px solid #00C6FF;
+    padding-right: 12px;
+}
+
+.manga-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 24px;
+    margin-bottom: 50px;
+}
+
+.manga-card {
+    background-color: #16191E;
+    border: 1.5px solid #2D3139;
+    border-radius: 14px;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+}
+
+.manga-card:hover {
+    transform: translateY(-8px);
+    border-color: #0072FF;
+    box-shadow: 0 10px 20px rgba(0, 114, 255, 0.15);
+}
+
+.manga-cover-wrapper {
+    position: relative;
+    width: 100%;
+    height: 280px;
+    overflow: hidden;
+}
+
+.manga-cover-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.manga-card:hover .manga-cover-wrapper img {
+    transform: scale(1.05);
+}
+
+.status-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background-color: rgba(22, 25, 30, 0.85);
+    backdrop-filter: blur(4px);
+    color: #59B259;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid #2D3139;
+}
+
+.manga-details {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.manga-sub {
+    font-size: 11px;
+    color: #9AA0A6;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.manga-title {
+    font-size: 15px;
+    font-weight: bold;
+    color: #ffffff;
+    margin-bottom: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chapters-badge {
+    background-color: #003366;
+    color: #A8C7FA;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 6px;
+    align-self: flex-start;
+}
+
+/* Team Hub Dashboard styling */
+.team-dashboard {
+    background-color: #16191E;
+    border: 1.5px solid #2D3139;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 50px;
+}
+
+.team-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.team-member-card {
+    background-color: #1D2024;
+    border: 1px solid #2D3139;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.member-avatar {
+    width: 48px;
+    height: 48px;
+    background-color: #2D3139;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+.member-role {
+    background-color: #0072FF;
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-top: 4px;
+}
+
+/* Reader Engine layout */
+.reader-container {
+    max-width: 800px;
+    margin: 30px auto;
+    text-align: center;
+}
+
+.reader-control-bar {
+    background-color: #16191E;
+    border: 1px solid #2D3139;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.reader-btn {
+    background-color: #1D2024;
+    border: 1px solid #2D3139;
+    color: #ffffff;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.reader-btn:hover {
+    background-color: #2D3139;
+}
+
+.comic-pages-stack img {
+    width: 100%;
+    display: block;
+    margin-bottom: 4px;
+}
+
+/* Footer styles */
+.mangata-footer {
+    background-color: #0B0C0E;
+    border-top: 1.5px solid #2D3139;
+    padding: 40px 5%;
+    text-align: center;
+    font-size: 13px;
+    color: #5F6368;
+    margin-top: 80px;
+}
+
+.footer-nav {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-bottom: 20px;
+}
+
+.footer-nav a {
+    color: #80868B;
+}
+
+.footer-nav a:hover {
+    color: #ffffff;
+}
+
+/* Pricing/VIP plans store screen */
+.store-wrapper {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+    margin: 30px 0;
+}
+
+.plan-card {
+    background-color: #16191E;
+    border: 1.5px solid #2D3139;
+    border-radius: 16px;
+    padding: 30px;
+    text-align: center;
+    transition: border 0.3s ease;
+}
+
+.plan-card:hover {
+    border-color: #ffd700;
+}
+
+.plan-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #ffffff;
+}
+
+.plan-price {
+    font-size: 24px;
+    font-weight: 800;
+    color: #A8C7FA;
+    margin: 15px 0;
+}
+
+.plan-btn {
+    background: linear-gradient(135deg, #00C6FF, #0072FF);
+    color: #ffffff;
+    border: none;
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.plan-btn:hover {
+    filter: brightness(1.15);
+}
+
+.gold-plan-btn {
+    background: linear-gradient(135deg, #ffd700, #ffa500);
+    color: #101216;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .mangata-header {
+        flex-direction: column;
+        gap: 15px;
+    }
+    .hero-title {
+        font-size: 24px;
+    }
+    .manga-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+    .manga-cover-wrapper {
+        height: 220px;
+    }
+}
