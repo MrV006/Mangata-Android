@@ -23,7 +23,7 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     private val sharedPrefs = application.getSharedPreferences("mangata_prefs", android.content.Context.MODE_PRIVATE)
 
     // Domain setting state
-    private val _siteDomain = MutableStateFlow(sharedPrefs.getString("domain_url", "https://mangata.site") ?: "https://mangata.site")
+    private val _siteDomain = MutableStateFlow(sharedPrefs.getString("domain_url", "https://mr-v.ir") ?: "https://mr-v.ir")
     val siteDomain: StateFlow<String> = _siteDomain.asStateFlow()
 
     private val _isDomainConnected = MutableStateFlow(true)
@@ -100,7 +100,7 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Advanced features streams
-    private val _currentUserId = MutableStateFlow(6)
+    private val _currentUserId = MutableStateFlow(sharedPrefs.getInt("logged_in_user_id", 6))
     val currentUserId: StateFlow<Int> = _currentUserId.asStateFlow()
 
     val userAccounts: StateFlow<List<UserAccount>> = repository.allUserAccounts
@@ -206,9 +206,30 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         // Initialize setup and seeds
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
+                // Fetch dynamic WordPress Manga list from mr-v.ir upon startup
+                try {
+                    val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                    val wpMangas = api.getMangas()
+                    if (wpMangas.isNotEmpty()) {
+                        repository.insertAllMangas(wpMangas)
+                        Log.d(LOG_TAG, "Connected to WordPress. Synced ${wpMangas.size} mangas.")
+                    }
+                } catch (e: Exception) {
+                    Log.e(LOG_TAG, "Startup WordPress mangas sync failed: ${e.message}")
+                }
+
                 val current = database.mangaDao().getAllMangas().first()
                 if (current.isEmpty()) {
                     Log.d(LOG_TAG, "Database is empty. Waiting for API sync...")
+                }
+
+                // Sync currently logged-in user wallet and purchases with WordPress on start
+                val loggedInId = sharedPrefs.getInt("logged_in_user_id", -1)
+                if (loggedInId != -1 && loggedInId != 6) {
+                    val userAcc = database.mangaDao().getUserAccountByIdOneShot(loggedInId)
+                    if (userAcc != null) {
+                        syncUserBalanceWithWordPress(userAcc)
+                    }
                 }
             }
 
@@ -456,19 +477,144 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
 
     fun switchUser(userId: Int) {
         _currentUserId.value = userId
+        sharedPrefs.edit().putInt("logged_in_user_id", userId).apply()
+        viewModelScope.launch {
+            val matchedUser = repository.allUserAccounts.first().find { it.id == userId }
+            if (matchedUser != null && userId != 6) {
+                syncUserBalanceWithWordPress(matchedUser)
+            }
+        }
+    }
+
+    fun syncUserBalanceWithWordPress(user: UserAccount) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Collect existing local purchases
+                val localPurchases = repository.getPurchasedChapters(user.id).first()
+                val purchasesMap = localPurchases.map { 
+                    com.example.network.ServerChapterPurchase(mangaId = it.mangaId, chapterNumber = it.chapterNumber)
+                }
+
+                val moshi = com.squareup.moshi.Moshi.Builder()
+                    .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
+                    .build()
+                val jsonAdapter = moshi.adapter<List<com.example.network.ServerChapterPurchase>>(
+                    com.squareup.moshi.Types.newParameterizedType(List::class.java, com.example.network.ServerChapterPurchase::class.java)
+                )
+                val localPurchasesJson = jsonAdapter.toJson(purchasesMap)
+
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                val req = com.example.network.SyncRequest(
+                    username = user.username,
+                    walletRial = user.walletRial,
+                    walletGiftChapters = user.walletGiftChapters,
+                    purchasedChaptersJson = localPurchasesJson
+                )
+                val response = api.syncUserData(req)
+                if (response.error == null) {
+                    val updatedUser = user.copy(
+                        displayName = response.displayName,
+                        role = response.role,
+                        subRole = response.subRole,
+                        walletRial = response.walletRial,
+                        walletGiftChapters = response.walletGiftChapters
+                    )
+                    repository.insertUserAccount(updatedUser)
+
+                    // Synchronize newly fetched purchases from WordPress
+                    val srvPurchases = jsonAdapter.fromJson(response.purchasedChaptersJson) ?: emptyList()
+                    srvPurchases.forEach { sp ->
+                        repository.insertChapterPurchase(
+                            ChapterPurchaseRecord(
+                                userId = user.id,
+                                mangaId = sp.mangaId,
+                                chapterNumber = sp.chapterNumber,
+                                purchaseTime = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "WordPress profile sync failed: ${e.message}")
+            }
+        }
     }
 
     fun loginUser(usernameInput: String, passwordInput: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            val accounts = repository.allUserAccounts.first()
-            val matched = accounts.find { it.username.trim().equals(usernameInput.trim(), ignoreCase = true) }
-            if (matched == null) {
-                withContext(Dispatchers.Main) { onError("کاربری با این نام کاربری یافت نشد.") }
-            } else if (matched.password != passwordInput) {
-                withContext(Dispatchers.Main) { onError("رمز عبور وارد شده اشتباه است.") }
-            } else {
-                _currentUserId.value = matched.id
-                withContext(Dispatchers.Main) { onSuccess() }
+            try {
+                // Call real WordPress login REST API strictly synced on mr-v.ir
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                val response = api.loginUser(com.example.network.LoginRequest(usernameInput.trim(), passwordInput))
+
+                if (response.error != null) {
+                    withContext(Dispatchers.Main) { onError(response.error) }
+                    return@launch
+                }
+
+                val dbAccounts = repository.allUserAccounts.first()
+                val existing = dbAccounts.find { it.username.trim().equals(response.username, ignoreCase = true) }
+
+                val userToSave = UserAccount(
+                    id = existing?.id ?: 0,
+                    username = response.username,
+                    displayName = response.displayName,
+                    role = response.role,
+                    subRole = response.subRole,
+                    walletRial = response.walletRial,
+                    walletGiftChapters = response.walletGiftChapters,
+                    password = passwordInput
+                )
+                repository.insertUserAccount(userToSave)
+
+                val finalAccounts = repository.allUserAccounts.first()
+                val matched = finalAccounts.find { it.username.trim().equals(response.username, ignoreCase = true) }
+
+                if (matched != null) {
+                    try {
+                        val moshi = com.squareup.moshi.Moshi.Builder()
+                            .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
+                            .build()
+                        val jsonAdapter = moshi.adapter<List<com.example.network.ServerChapterPurchase>>(
+                            com.squareup.moshi.Types.newParameterizedType(List::class.java, com.example.network.ServerChapterPurchase::class.java)
+                        )
+                        val srvPurchases = jsonAdapter.fromJson(response.purchasedChaptersJson) ?: emptyList()
+                        srvPurchases.forEach { sp ->
+                            repository.insertChapterPurchase(
+                                ChapterPurchaseRecord(
+                                    userId = matched.id,
+                                    mangaId = sp.mangaId,
+                                    chapterNumber = sp.chapterNumber,
+                                    purchaseTime = System.currentTimeMillis()
+                                )
+                            )
+                        }
+                    } catch (e: Exception) {
+                        Log.e(LOG_TAG, "Moshi error restoring purchased chapters: ${e.message}")
+                    }
+
+                    sharedPrefs.edit().putInt("logged_in_user_id", matched.id).apply()
+                    _currentUserId.value = matched.id
+                    withContext(Dispatchers.Main) { onSuccess() }
+                } else {
+                    withContext(Dispatchers.Main) { onError("خطا در همگام‌سازی کاربر.") }
+                }
+            } catch (e: Exception) {
+                // Secure offline fallback verification for offline reading capability
+                Log.e(LOG_TAG, "WordPress authenticate failed, trying offline DB: ${e.message}")
+                val accounts = repository.allUserAccounts.first()
+                val matched = accounts.find { it.username.trim().equals(usernameInput.trim(), ignoreCase = true) }
+                if (matched == null) {
+                    withContext(Dispatchers.Main) { 
+                        onError("ارتباط با سایت برقرار نشد و هیچ حساب محلی قبلی با این مشخصات یافت نگردید.") 
+                    }
+                } else if (matched.password != passwordInput) {
+                    withContext(Dispatchers.Main) { onError("رمز عبور آفلاین اشتباه است.") }
+                } else {
+                    sharedPrefs.edit().putInt("logged_in_user_id", matched.id).apply()
+                    _currentUserId.value = matched.id
+                    withContext(Dispatchers.Main) { onSuccess() }
+                }
             }
         }
     }
@@ -483,27 +629,68 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         onError: (String) -> Unit = {}
     ) {
         viewModelScope.launch(Dispatchers.IO) {
-            val accounts = repository.allUserAccounts.first()
-            if (accounts.any { it.username.trim().equals(username.trim(), ignoreCase = true) }) {
-                withContext(Dispatchers.Main) { onError("این نام کاربری قبلاً ثبت شده است.") }
-                return@launch
-            }
-            val user = UserAccount(
-                username = username.trim(),
-                displayName = displayName.trim(),
-                role = role,
-                subRole = subRole,
-                walletRial = 0,
-                walletGiftChapters = 0,
-                storyTokens = 0,
-                password = passwordInput
-            )
-            repository.insertUserAccount(user)
-            val updatedAccounts = repository.allUserAccounts.first()
-            val registeredUser = updatedAccounts.find { it.username == username.trim() }
-            if (registeredUser != null) {
-                _currentUserId.value = registeredUser.id
-                withContext(Dispatchers.Main) { onSuccess() }
+            try {
+                // Call real WordPress registration API on mr-v.ir
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                val response = api.registerUser(com.example.network.RegisterRequest(username.trim(), displayName.trim(), passwordInput))
+
+                if (response.error != null) {
+                    withContext(Dispatchers.Main) { onError(response.error) }
+                    return@launch
+                }
+
+                val user = UserAccount(
+                    username = response.username,
+                    displayName = response.displayName,
+                    role = response.role,
+                    subRole = response.subRole,
+                    walletRial = response.walletRial,
+                    walletGiftChapters = response.walletGiftChapters,
+                    password = passwordInput
+                )
+                repository.insertUserAccount(user)
+
+                val updatedAccounts = repository.allUserAccounts.first()
+                val registeredUser = updatedAccounts.find { it.username == response.username }
+                if (registeredUser != null) {
+                    sharedPrefs.edit().putInt("logged_in_user_id", registeredUser.id).apply()
+                    _currentUserId.value = registeredUser.id
+                    withContext(Dispatchers.Main) { onSuccess() }
+                } else {
+                    withContext(Dispatchers.Main) { onError("خطا در ورود مجدد کاربر ثبت‌نامی.") }
+                }
+            } catch (e: Exception) {
+                // Local fallback registration
+                Log.e(LOG_TAG, "WordPress signup failed, creating offline mock: ${e.message}")
+                val accounts = repository.allUserAccounts.first()
+                if (accounts.any { it.username.trim().equals(username.trim(), ignoreCase = true) }) {
+                    withContext(Dispatchers.Main) { onError("این نام کاربری از قبل ثبت شده است.") }
+                    return@launch
+                }
+
+                val isMrv = username.trim().equals("Mr.V", ignoreCase = true)
+                val finalRole = if (isMrv) "SUPER_ADMIN" else role
+                val finalSubRole = if (isMrv) "مدیر کل" else subRole
+
+                val user = UserAccount(
+                    username = username.trim(),
+                    displayName = displayName.trim(),
+                    role = finalRole,
+                    subRole = finalSubRole,
+                    walletRial = 0,
+                    walletGiftChapters = 0,
+                    password = passwordInput
+                )
+                repository.insertUserAccount(user)
+                val updatedAccounts = repository.allUserAccounts.first()
+                val registeredUser = updatedAccounts.find { it.username == username.trim() }
+                if (registeredUser != null) {
+                    sharedPrefs.edit().putInt("logged_in_user_id", registeredUser.id).apply()
+                    _currentUserId.value = registeredUser.id
+                    withContext(Dispatchers.Main) { onSuccess() }
+                } else {
+                    withContext(Dispatchers.Main) { onError("خطا در ایجاد کاربر آفلاین.") }
+                }
             }
         }
     }
@@ -700,6 +887,43 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         val cost = settings.baseChapterPrice
 
         viewModelScope.launch(Dispatchers.IO) {
+            // Attempt Online Purchase on WordPress Server first
+            try {
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                val res = api.purchaseChapterOnServer(
+                    com.example.network.PurchaseRequest(
+                        userId = user.id,
+                        mangaId = mangaId,
+                        chapterNumber = chapterNumber,
+                        price = cost.toLong(),
+                        isGiftUse = useGiftPoints
+                    )
+                )
+                if (res.success) {
+                    val updatedWithServer = user.copy(
+                        walletRial = res.walletRial,
+                        walletGiftChapters = res.walletGiftChapters
+                    )
+                    repository.insertUserAccount(updatedWithServer)
+                    repository.insertChapterPurchase(
+                        ChapterPurchaseRecord(
+                            userId = user.id,
+                            mangaId = mangaId,
+                            chapterNumber = chapterNumber,
+                            purchaseTime = System.currentTimeMillis()
+                        )
+                    )
+                    withContext(Dispatchers.Main) { onSuccess() }
+                    return@launch
+                } else {
+                    withContext(Dispatchers.Main) { onError(res.errorMessage ?: "موجودی کافی نیست.") }
+                    return@launch
+                }
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "WordPress server purchase failed, trying offline local balance: ${e.message}")
+            }
+
+            // Local fallback simulation when connection to mr-v.ir is down
             if (useGiftPoints) {
                 if (user.walletGiftChapters >= 1) {
                     val updatedUser = user.copy(walletGiftChapters = user.walletGiftChapters - 1)

