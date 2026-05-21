@@ -327,6 +327,45 @@ fun AdminConfigureSettings(viewModel: MovieViewModel, settings: SystemSettingsEn
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            Divider(color = Color(0xFF2D3139), modifier = Modifier.padding(vertical = 12.dp))
+
+            Text("وضعیت تست‌های استخدام کادر فنی", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+            Text("نکته: غیرفعال کردن هر گزینه بلافاصله دکمه ارسال رزومه آن تخصص را در فرم ثبت‌نام اصلی غیرفعال می‌کند.", color = Color.Gray, fontSize = 9.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val tActive by viewModel.isTranslatorTestUploaded.collectAsState()
+            val cActive by viewModel.isCleanerTestUploaded.collectAsState()
+            val tyActive by viewModel.isTypistTestUploaded.collectAsState()
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Switch(checked = tActive, onCheckedChange = { viewModel.setTranslatorTestUploaded(it) })
+                Text("۱. فایل تست مترجمی فعال باشد", color = Color.LightGray, fontSize = 11.sp)
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Switch(checked = cActive, onCheckedChange = { viewModel.setCleanerTestUploaded(it) })
+                Text("۲. فایل تست کلینر فعال باشد", color = Color.LightGray, fontSize = 11.sp)
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Switch(checked = tyActive, onCheckedChange = { viewModel.setTypistTestUploaded(it) })
+                Text("۳. فایل تست ادیتور/تایپیست فعال باشد", color = Color.LightGray, fontSize = 11.sp)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Button(
                 onClick = {
                     val p = basePrice.toIntOrNull() ?: 400

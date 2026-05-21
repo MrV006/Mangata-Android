@@ -10,11 +10,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import com.example.ui.MovieViewModel
 import com.example.ui.components.EditProfileDialog
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -227,6 +230,89 @@ fun ProfileDashboard(viewModel: MovieViewModel) {
                                     showEditDialog = false
                                 }
                             )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Divider(color = Color(0xFF2D3139))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val purchasedList by viewModel.getPurchasedChapters(user.id).collectAsState(initial = emptyList())
+            val mangas by viewModel.mangas.collectAsState()
+            val purchasedMangas = remember(purchasedList, mangas) {
+                mangas.filter { manga -> purchasedList.any { it.mangaId == manga.id } }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.LibraryBooks, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(20.dp))
+                Text("مانهوا‌های خریداری شده من (${purchasedMangas.size})", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            }
+
+            if (purchasedMangas.isEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF14171C)),
+                    border = BorderStroke(1.dp, Color(0xFF232830)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        "هنوز هیچ فصلی از هیچ مانهوایی خریداری نکرده‌اید. با خرید تک چپترها، مانهوهای شما در این بخش نشان داده خواهند شد.",
+                        color = Color.Gray,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(16.dp)
+                    )
+                }
+            } else {
+                purchasedMangas.forEach { manga ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable {
+                                viewModel.selectManga(manga)
+                                viewModel.selectTab(0)
+                            },
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF14171C)),
+                        border = BorderStroke(1.dp, Color(0xFF232830)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                            
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(manga.titleFa, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text("${manga.chaptersCount} فصل", color = Color.Gray, fontSize = 10.sp)
+                                }
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .size(45.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.DarkGray)
+                                ) {
+                                    AsyncImage(
+                                        model = manga.coverUrl,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
                         }
                     }
                 }

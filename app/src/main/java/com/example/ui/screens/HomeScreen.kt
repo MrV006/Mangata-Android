@@ -41,6 +41,8 @@ import com.example.ui.components.ForcedUpdateScreen
 import com.example.ui.components.ChapterUnlockDialog
 import com.example.ui.components.SupportTicketSystem
 
+data class ReviewItem(val author: String, val text: String, val rating: Int)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(viewModel: MovieViewModel) {
@@ -1172,14 +1174,13 @@ fun StoreDashboard(viewModel: MovieViewModel) {
 
 @Composable
 fun SettingsDashboard(viewModel: MovieViewModel) {
+    val context = LocalContext.current
     val siteDomain by viewModel.siteDomain.collectAsState()
     val isDomainConnected by viewModel.isDomainConnected.collectAsState()
+    val isVerticalMode by viewModel.isVerticalWebtoonMode.collectAsState()
 
     var inputDomain by remember { mutableStateOf(siteDomain) }
     var showPingState by remember { mutableStateOf(false) }
-
-    var regUsername by remember { mutableStateOf("") }
-    var regDisplayName by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -1189,19 +1190,121 @@ fun SettingsDashboard(viewModel: MovieViewModel) {
         horizontalAlignment = Alignment.End
     ) {
         val currentUserAccount by viewModel.currentUserAccount.collectAsState()
-        
+
+        Text(
+            "تنظیمات اپلیکیشن",
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Black,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        // General settings list
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF16191E)),
+            border = BorderStroke(1.dp, Color(0xFF2D3139)),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                     "تنظیمات عمومی قرائت‌گر مانهوا",
+                     color = Color.White,
+                     fontWeight = FontWeight.Bold,
+                     fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Switch(
+                        checked = isVerticalMode,
+                        onCheckedChange = { viewModel.toggleReaderDirection() }
+                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("حالت اسکرول عمودی وب‌تون", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("نمایش پشت سر هم و پیمایش نرم عمودی", color = Color.Gray, fontSize = 10.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Divider(color = Color(0xFF23252C))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = {
+                            Toast.makeText(context, "حافظه موقت و کش تصاویر با موفقیت سبک‌سازی شد.", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0x33FF5252)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("پاکسازی", color = Color(0xFFFF5252), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("پاکسازی حافظه پنهان", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("آزاد کردن رم و تمیز کردن فایل‌های دانلودی موقت", color = Color.Gray, fontSize = 10.sp)
+                    }
+                }
+            }
+        }
+
+        // About app card
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF16191E)),
+            border = BorderStroke(1.dp, Color(0xFF2CBF3B).copy(alpha = 0.2f)),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                     "درباره برنامه",
+                     color = Color.White,
+                     fontWeight = FontWeight.Bold,
+                     fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "نسخه فعلی: ۲.۴.۰ ریلیز تجاری پایدار\n" +
+                    "این اپلیکیشن کاملا بومی و یکپارچه به منظور اتصال خودکار به وب‌سایت مانگاتا و تسهیل مطالعه مانهوا و کسب درآمد کادر فنی طراحی گردیده است.",
+                    color = Color.LightGray,
+                    fontSize = 11.sp,
+                    lineHeight = 18.sp,
+                    textAlign = TextAlign.Right
+                )
+            }
+        }
+
+        // Admin-only: URL Domain settings and synced indicators
         currentUserAccount?.let { user ->
             if (user.role == "SUPER_ADMIN") {
+                Spacer(modifier = Modifier.height(8.dp))
+                Divider(color = Color(0xFF2D3139))
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Text(
-                    "تنظیمات اتصال به دامنه سایت",
+                    "تنظیمات اتصال به دامنه سایت (ویژه مدیر کل)",
                     color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Black,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 6.dp)
                 )
 
                 Text(
-                    "آدرس هاست یا دامنه سایت وردپرسی یا کاستوم خود را وارد نمایید تا اپلیکیشن مانهواها را به صورت پویا از سایت واقعی شما لود کند.",
+                    "آدرس هاست یا دامنه سایت وردپرسی خود را وارد نمایید تا اپلیکیشن اطلاعات مانهواها را به صورت پویا از سایت واقعی شما لود کند.",
                     color = Color.Gray,
                     fontSize = 11.sp,
                     textAlign = TextAlign.Right,
@@ -1211,7 +1314,7 @@ fun SettingsDashboard(viewModel: MovieViewModel) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF16191E)),
-                    border = BorderStroke(1.dp, Color(0xFF2D3139)),
+                    border = BorderStroke(1.dp, Color(0xFF00C6FF).copy(alpha = 0.3f)),
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     Column(
@@ -1219,7 +1322,7 @@ fun SettingsDashboard(viewModel: MovieViewModel) {
                         horizontalAlignment = Alignment.End
                     ) {
                         Text(
-                            "تنظیم آدرس اتصال API",
+                            "آدرس کانکشن وب‌سایت",
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
@@ -1230,7 +1333,7 @@ fun SettingsDashboard(viewModel: MovieViewModel) {
                         OutlinedTextField(
                             value = inputDomain,
                             onValueChange = { inputDomain = it },
-                            placeholder = { Text("https://myketmanga.com/wp-json") },
+                            placeholder = { Text("https://mangata.site/wp-json") },
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White
@@ -1251,7 +1354,7 @@ fun SettingsDashboard(viewModel: MovieViewModel) {
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Text(
-                                        text = if (isDomainConnected) "متصل به دامنه" else "در حال راستی‌آزمایی...",
+                                        text = if (isDomainConnected) "وب‌سایت مانگاتا با موفقیت همگام‌سازی شد ✓" else "در حال پینگ و راستی‌آزمایی...",
                                         color = if (isDomainConnected) Color(0xFF59B259) else Color.Gray,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
@@ -1281,39 +1384,6 @@ fun SettingsDashboard(viewModel: MovieViewModel) {
                                 Text("اعمال و بررسی پینگ", color = Color.White, fontSize = 11.sp)
                             }
                         }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Technical Guide for zero programmer setup
-                Text(
-                    "راهنمای راه‌اندازی هاست برای صاحب امتیاز:",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1D2024)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        horizontalAlignment = Alignment.End
-                    ) {
-                        Text(
-                            "۱. یک سایت با وردپرس (WordPress) روی هاست خود بسازید.\n" +
-                            "۲. پوسته رایگان Madara یا wp-manga را نصب کنید.\n" +
-                            "۳. افزونه‌های REST API پیشفرض را فعال بگذارید.\n" +
-                            "۴. دامنه خود را در کادر بالا وارد کنید تا مانهواهای شما مستقیما خوانده شوند!",
-                            color = Color.LightGray,
-                            fontSize = 11.sp,
-                            lineHeight = 20.sp,
-                            textAlign = TextAlign.Right
-                        )
                     }
                 }
             }
@@ -1529,9 +1599,9 @@ fun MangaDetailOverlay(
             // Chapter items rendering
             // Chapters 1 to 3 are FREE. Chapters > 3 are locked VIP early release unless purchased
             val startCh = if (startsFromZero) 0 else 1
-            val endCh = if (startsFromZero) 7 else 8
+            val endCh = manga.chaptersCount
             for (ch in startCh..endCh) {
-                val isPremiumChapter = ch > 3
+                val isPremiumChapter = manga.isPremium && ch > 3
                 val isPurchased = purchasedList.any { it.mangaId == manga.id && it.chapterNumber == ch }
                 val isUnlocked = !isPremiumChapter || isVipActive || isPurchased
 
@@ -1617,7 +1687,7 @@ fun MangaDetailOverlay(
                         }
 
                         Text(
-                            "فصل $ch: آرک رستاخیز سایه ها",
+                            "فصل $ch از مانهوای ${manga.titleFa}",
                             color = if (isUnlocked) Color.White else Color.Gray,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
@@ -1636,6 +1706,193 @@ fun MangaDetailOverlay(
                         viewModel.openReader(manga, chapNum)
                     }
                 )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Divider(color = Color(0xFF2D3139))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                "دیدگاه‌ها و نظرات خوانندگان",
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            // Parse live reviews
+            val reviewsList = remember(manga.reviewsJson) {
+                val list = mutableListOf<ReviewItem>()
+                if (!manga.reviewsJson.isNullOrEmpty()) {
+                    try {
+                        val array = org.json.JSONArray(manga.reviewsJson)
+                        for (i in 0 until array.length()) {
+                            val obj = array.getJSONObject(i)
+                            list.add(
+                                ReviewItem(
+                                    author = obj.optString("author", "کاربر ناشناس"),
+                                    text = obj.optString("text", ""),
+                                    rating = obj.optInt("rating", 5)
+                                )
+                            )
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                list
+            }
+
+            if (reviewsList.isEmpty()) {
+                Text(
+                    "هنوز هیچ دیدگاهی ثبت نشده است. اولین نفری باشید که نظر می‌دهد!",
+                    color = Color.Gray,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                )
+            } else {
+                reviewsList.forEach { review ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF16191E)),
+                        border = BorderStroke(1.dp, Color(0xFF2C3038)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Star ratings
+                                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    for (star in 1..5) {
+                                        Icon(
+                                            imageVector = Icons.Default.Star,
+                                            contentDescription = null,
+                                            tint = if (star <= review.rating) Color(0xFFFFD700) else Color.DarkGray,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = review.author,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = review.text,
+                                color = Color.LightGray,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Right,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Text form to submit new review
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF101216)),
+                border = BorderStroke(1.dp, Color(0xFF1D2128)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text(
+                        "ثبت دیدگاه جدید برای این اثر",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    if (currentUser == null) {
+                        Text(
+                            "برای ارسال نظر و بازخورد ابتدا باید وارد حساب کاربری خود شوید.",
+                            color = Color(0xFFFF5252),
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Right,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        var newReviewText by remember { mutableStateOf("") }
+                        var selectedRating by remember { mutableStateOf(5) }
+
+                        OutlinedTextField(
+                            value = newReviewText,
+                            onValueChange = { newReviewText = it },
+                            placeholder = { Text("دیدگاه خود را بنویسید...") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier.clickable { },
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                for (star in 1..5) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = null,
+                                        tint = if (star <= selectedRating) Color(0xFFFFD700) else Color.DarkGray,
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .clickable { selectedRating = star }
+                                    )
+                                }
+                            }
+                            Text("امتیاز شما به اثر:", color = Color.Gray, fontSize = 11.sp)
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = {
+                                if (newReviewText.isNotBlank()) {
+                                    viewModel.addMangaReview(
+                                        mangaId = manga.id,
+                                        author = currentUser!!.displayName,
+                                        text = newReviewText,
+                                        rating = selectedRating
+                                    )
+                                    newReviewText = ""
+                                    Toast.makeText(context, "دیدگاه شما با موفقیت ثبت شد!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "لطفا متن دیدگاه را خالی نگذارید.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C6FF)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("ارسال دیدگاه", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(30.dp))

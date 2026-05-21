@@ -114,9 +114,9 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         .map { it ?: SystemSettingsEntity() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SystemSettingsEntity())
 
-    val isTranslatorTestUploaded = MutableStateFlow(true)
-    val isCleanerTestUploaded = MutableStateFlow(false)
-    val isTypistTestUploaded = MutableStateFlow(false)
+    val isTranslatorTestUploaded = MutableStateFlow(sharedPrefs.getBoolean("test_uploaded_translator", true))
+    val isCleanerTestUploaded = MutableStateFlow(sharedPrefs.getBoolean("test_uploaded_cleaner", false))
+    val isTypistTestUploaded = MutableStateFlow(sharedPrefs.getBoolean("test_uploaded_typist", false))
 
     val recruitmentApps: StateFlow<List<RecruitmentApplication>> = repository.allRecruitments
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -664,6 +664,21 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setTranslatorTestUploaded(uploaded: Boolean) {
+        sharedPrefs.edit().putBoolean("test_uploaded_translator", uploaded).apply()
+        isTranslatorTestUploaded.value = uploaded
+    }
+
+    fun setCleanerTestUploaded(uploaded: Boolean) {
+        sharedPrefs.edit().putBoolean("test_uploaded_cleaner", uploaded).apply()
+        isCleanerTestUploaded.value = uploaded
+    }
+
+    fun setTypistTestUploaded(uploaded: Boolean) {
+        sharedPrefs.edit().putBoolean("test_uploaded_typist", uploaded).apply()
+        isTypistTestUploaded.value = uploaded
+    }
+
     fun payWalletTopup(amount: Long) {
         val user = currentUserAccount.value ?: return
         viewModelScope.launch(Dispatchers.IO) {
@@ -1092,6 +1107,30 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
                 bannerUrl = bannerUrl
             )
             repository.updateManga(updatedManga)
+        }
+    }
+
+    fun addMangaReview(mangaId: Int, author: String, text: String, rating: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = repository.allMangas.first()
+            val manga = list.find { it.id == mangaId } ?: return@launch
+            try {
+                val array = if (manga.reviewsJson.isNullOrEmpty()) {
+                    org.json.JSONArray()
+                } else {
+                    org.json.JSONArray(manga.reviewsJson)
+                }
+                val newObj = org.json.JSONObject().apply {
+                    put("author", author)
+                    put("text", text)
+                    put("rating", rating)
+                }
+                array.put(newObj)
+                val updatedManga = manga.copy(reviewsJson = array.toString())
+                repository.updateManga(updatedManga)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
