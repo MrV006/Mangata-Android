@@ -41,9 +41,9 @@ fun AdminPanel(viewModel: MovieViewModel) {
     val unansweredCount = allTickets.count { !it.isAnswered }
     val context = LocalContext.current
 
-    var selectedAdminSubTab by remember { mutableStateOf("تنظیمات") } // "تنظیمات", "مشارکت‌ها", "استخدام‌ها", "نسخه‌ها", "مدیریت آثار & آپلود"
+        var selectedAdminSubTab by remember { mutableStateOf("تنظیمات") } // "تنظیمات", "مشارکت‌ها", "استخدام‌ها", "نسخه‌ها", "مدیریت آثار & آپلود", "طراحی و محتوا"
 
-    Column(
+        Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
@@ -166,7 +166,7 @@ fun AdminPanel(viewModel: MovieViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                listOf("نسخه‌ها", "مدیریت آثار & آپلود").forEach { tab ->
+                listOf("نسخه‌ها", "مدیریت آثار", "محتوا").forEach { tab ->
                     val isSelected = selectedAdminSubTab == tab
                     Box(
                         modifier = Modifier
@@ -193,7 +193,8 @@ fun AdminPanel(viewModel: MovieViewModel) {
             "مشارکت‌ها" -> AdminUserCollaboration(viewModel, accounts)
             "استخدام‌ها" -> AdminRecruitmentsList(viewModel, recruitments)
             "نسخه‌ها" -> AdminVersionControl(viewModel)
-            "مدیریت آثار & آپلود" -> AdminMangaManager(viewModel)
+            "مدیریت آثار" -> AdminMangaManager(viewModel)
+            "محتوا" -> AdminUIContentManager(viewModel)
         }
     }
 }

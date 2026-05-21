@@ -114,6 +114,10 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         .map { it ?: SystemSettingsEntity() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SystemSettingsEntity())
 
+    val isTranslatorTestUploaded = MutableStateFlow(true)
+    val isCleanerTestUploaded = MutableStateFlow(false)
+    val isTypistTestUploaded = MutableStateFlow(false)
+
     val recruitmentApps: StateFlow<List<RecruitmentApplication>> = repository.allRecruitments
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -204,8 +208,7 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.IO) {
                 val current = database.mangaDao().getAllMangas().first()
                 if (current.isEmpty()) {
-                    Log.d(LOG_TAG, "Seeding database with popular mangas and team members...")
-                    repository.seedDatabase()
+                    Log.d(LOG_TAG, "Database is empty. Waiting for API sync...")
                 }
             }
 
@@ -358,21 +361,51 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateUserProfile(user: UserAccount, name: String, username: String, pass: String, picUrl: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updatedUser = user.copy(
+                displayName = name,
+                username = username,
+                password = pass
+            )
+            repository.insertUserAccount(updatedUser)
+            
+            // Note: Since picUrl is not a database column, if we wanted to persist it across sessions,
+            // we could save it in SharedPreferences mapped by user ID.
+            if (picUrl.isNotEmpty()) {
+                sharedPrefs.edit().putString("profile_pic_${user.id}", picUrl).apply()
+            }
+        }
+    }
+
     fun closeMyketCheckout() {
         _showMyketBillingDialog.value = false
         _selectedSkuToBuy.value = null
     }
 
-    fun completeSimulatedPurchase(sku: String) {
+    fun completeSimulatedPurchase(sku: String, onInsufficient: (() -> Unit)? = null) {
+        val user = currentUserAccount.value
+        val details = myketHelper.skuDetailsMap[sku]
+        if (user == null || details == null) return
+
+        val costRial = details.priceToman.toLong() * 10
+
+        if (user.walletRial < costRial) {
+            onInsufficient?.invoke()
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                // Deduct cost
+                repository.insertUserAccount(user.copy(walletRial = user.walletRial - costRial))
+
                 val mockPurchase = myketHelper.generateSuccessfulPurchase(
                     sku = sku,
                     developerPayload = "payload_${System.currentTimeMillis()}"
                 )
 
-                val skuDetails = myketHelper.skuDetailsMap[sku]
-                val farsiTitle = skuDetails?.title ?: "اشتراک ویژه مانگاتا"
+                val farsiTitle = details.title
 
                 repository.addPurchase(
                     UserPurchase(

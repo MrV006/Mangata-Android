@@ -89,7 +89,7 @@ fun StaffDashboard(viewModel: MovieViewModel) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "به کادر مقتدر و پویای کرونکو خوش آمدید. عملکرد و فعالیت‌های شما مستقیما محاسبه و به درآمد متوازن شما افزوده می‌شود.",
+                    text = "به کادر مقتدر و پویای مانگاتا خوش آمدید. عملکرد و فعالیت‌های شما مستقیما محاسبه و به درآمد متوازن شما افزوده می‌شود.",
                     color = Color.LightGray,
                     fontSize = 11.sp,
                     textAlign = TextAlign.Right,

@@ -31,7 +31,7 @@ import com.example.myket.MyketBillingHelper
 fun MyketPurchaseDialog(
     skuDetails: MyketBillingHelper.SkuDetails,
     onDismiss: () -> Unit,
-    onConfirmPurchase: (String) -> Unit
+    onConfirmPurchase: (String, Int) -> Unit
 ) {
     // Custom Farsi colors representing Myket billing environment
     val myketPrimaryBrandColor = Color(0xFF21A653) // Myket green
@@ -325,7 +325,7 @@ fun MyketPurchaseDialog(
 
                     // Buttons
                     Button(
-                        onClick = { onConfirmPurchase(skuDetails.sku) },
+                        onClick = { onConfirmPurchase(skuDetails.sku, selectedPaymentMethod) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp)

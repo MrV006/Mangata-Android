@@ -80,7 +80,7 @@ fun ChapterUnlockDialog(
                 horizontalAlignment = Alignment.End
             ) {
                 Text(
-                    text = "فصل $chapterNumber به کادر همکاران کرونکو کردیت شده است.",
+                    text = "فصل $chapterNumber به کادر همکاران مانگاتا کردیت شده است.",
                     fontSize = 12.sp,
                     color = Color.LightGray,
                     textAlign = TextAlign.Right

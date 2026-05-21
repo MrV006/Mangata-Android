@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -43,6 +44,7 @@ import com.example.ui.components.SupportTicketSystem
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(viewModel: MovieViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val activeTab by viewModel.activeTab.collectAsState()
     val isVipActive by viewModel.isVipActive.collectAsState()
     val readingManga by viewModel.readingManga.collectAsState()
@@ -163,6 +165,7 @@ fun HomeScreen(viewModel: MovieViewModel) {
                 2 -> CollaboratorsDashboard(viewModel = viewModel)
                 3 -> StoreDashboard(viewModel = viewModel)
                 4 -> SettingsDashboard(viewModel = viewModel)
+                5 -> ProfileDashboard(viewModel = viewModel)
             }
 
             // Slide Up Details page overlay
@@ -211,8 +214,14 @@ fun HomeScreen(viewModel: MovieViewModel) {
                 MyketPurchaseDialog(
                     skuDetails = selectedSkuToBuy!!,
                     onDismiss = { viewModel.closeMyketCheckout() },
-                    onConfirmPurchase = { sku ->
-                        viewModel.completeSimulatedPurchase(sku)
+                    onConfirmPurchase = { sku, paymentMethod ->
+                        if (paymentMethod == 1) {
+                            Toast.makeText(context, "درگاه مستقیم بانکی در حال حاضر فعال نیست و پرداخت فقط با کیف پول مقدور است.", Toast.LENGTH_LONG).show()
+                        } else {
+                            viewModel.completeSimulatedPurchase(sku) {
+                                Toast.makeText(context, "موجودی کیف پول شما کافی نیست!", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
                 )
             }
@@ -255,7 +264,7 @@ fun LibraryDashboard(viewModel: MovieViewModel) {
                     .size(40.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .border(1.dp, Color(0xFF2D3139), RoundedCornerShape(12.dp))
-                    .clickable { viewModel.selectTab(4) }, // Open settings tab
+                    .clickable { viewModel.selectTab(5) }, // Open Profile Tab
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Default.AccountCircle, contentDescription = "حساب کاربری", tint = Color.LightGray)
@@ -361,6 +370,11 @@ fun LibraryDashboard(viewModel: MovieViewModel) {
             // Safe index check
             val indexToUse = if (activeSliderIndex >= featuredMangas.size) 0 else activeSliderIndex
             val featuredManga = featuredMangas[indexToUse]
+
+            LaunchedEffect(activeSliderIndex, featuredMangas.size) {
+                kotlinx.coroutines.delay(5000)
+                activeSliderIndex = if (indexToUse >= featuredMangas.size - 1) 0 else indexToUse + 1
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
@@ -1174,565 +1188,136 @@ fun SettingsDashboard(viewModel: MovieViewModel) {
             .padding(horizontal = 20.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.End
     ) {
-        Text(
-            "تنظیمات اتصال به دامنه سایت",
-            color = Color.White,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Black,
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
-
-        Text(
-            "آدرس هاست یا دامنه سایت وردپرسی یا کاستوم خود را وارد نمایید تا اپلیکیشن مانهواها را به صورت پویا از سایت واقعی شما لود کند.",
-            color = Color.Gray,
-            fontSize = 11.sp,
-            textAlign = TextAlign.Right,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF16191E)),
-            border = BorderStroke(1.dp, Color(0xFF2D3139)),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.End
-            ) {
-                Text(
-                    "تنظیم آدرس اتصال API",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = inputDomain,
-                    onValueChange = { inputDomain = it },
-                    placeholder = { Text("https://myketmanga.com/wp-json") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (showPingState) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = if (isDomainConnected) "متصل به دامنه" else "در حال راستی‌آزمایی...",
-                                color = if (isDomainConnected) Color(0xFF59B259) else Color.Gray,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(12.dp),
-                                strokeWidth = 1.5.dp,
-                                color = if (isDomainConnected) Color(0xFF59B259) else Color.White
-                            )
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.width(1.dp))
-                    }
-
-                    Button(
-                        onClick = {
-                            viewModel.updateSiteDomain(inputDomain)
-                            showPingState = true
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0055B3)),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("اعمال و بررسی پینگ", color = Color.White, fontSize = 11.sp)
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Technical Guide for zero programmer setup
-        Text(
-            "راهنمای راه‌اندازی هاست برای صاحب امتیاز:",
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1D2024)),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(14.dp),
-                horizontalAlignment = Alignment.End
-            ) {
-                Text(
-                    "۱. یک سایت با وردپرس (WordPress) روی هاست خود بسازید.\n" +
-                    "۲. پوسته رایگان Madara یا wp-manga را نصب کنید.\n" +
-                    "۳. افزونه‌های REST API پیشفرض را فعال بگذارید.\n" +
-                    "۴. دامنه خود را در کادر بالا وارد کنید تا مانهواهای شما مستقیما خوانده شوند!",
-                    color = Color.LightGray,
-                    fontSize = 11.sp,
-                    lineHeight = 20.sp,
-                    textAlign = TextAlign.Right
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            "سامانه مدیریت هویت و ورود ایمن به پلتفرم",
-            color = Color.White,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
-
-        Text(
-            "برای دسترسی به پنل‌های پیشرفته با توجه به نقش خود (مدیر، کلینر، ادیتور، مترجم یا کاربر عادی) از درگاه امن زیر وارد شوید. ارائه‌ی دسترسی مراجع عالی صرفاً از طریق هویت‌سنجی معتبر امکان‌پذیر است:",
-            color = Color.Gray,
-            fontSize = 11.sp,
-            textAlign = TextAlign.Right,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
         val currentUserAccount by viewModel.currentUserAccount.collectAsState()
-        val userAccounts by viewModel.userAccounts.collectAsState()
-
-        var loginMode by remember { mutableStateOf(true) } // true: Login, false: Register
         
-        var uUsername by remember { mutableStateOf("") }
-        var uPassword by remember { mutableStateOf("") }
-        var uDisplayName by remember { mutableStateOf("") }
-        
-        // Selected role for registration
-        var selectedRoleOption by remember { mutableStateOf("NORMAL_USER") }
-        var selectedSubRoleName by remember { mutableStateOf("کاربر عادی") }
+        currentUserAccount?.let { user ->
+            if (user.role == "SUPER_ADMIN") {
+                Text(
+                    "تنظیمات اتصال به دامنه سایت",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
 
-        var authError by remember { mutableStateOf("") }
-        var authSuccess by remember { mutableStateOf("") }
+                Text(
+                    "آدرس هاست یا دامنه سایت وردپرسی یا کاستوم خود را وارد نمایید تا اپلیکیشن مانهواها را به صورت پویا از سایت واقعی شما لود کند.",
+                    color = Color.Gray,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Right,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
 
-        // Let's render either User Account summary or Login/Register forms
-        if (currentUserAccount != null) {
-            val user = currentUserAccount!!
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1D24)),
-                shape = RoundedCornerShape(20.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxWidth()
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF16191E)),
+                    border = BorderStroke(1.dp, Color(0xFF2D3139)),
+                    shape = RoundedCornerShape(14.dp)
                 ) {
-                    // Header Background Profile Design
-                    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().height(100.dp)) {
-                        val canvasWidth = size.width
-                        val canvasHeight = size.height
-                        val path = androidx.compose.ui.graphics.Path().apply {
-                            moveTo(0f, 0f)
-                            lineTo(canvasWidth, 0f)
-                            lineTo(canvasWidth, canvasHeight * 0.7f)
-                            quadraticBezierTo(
-                                canvasWidth / 2, canvasHeight * 1.1f,
-                                0f, canvasHeight * 0.7f
-                            )
-                            close()
-                        }
-                        drawPath(
-                            path = path,
-                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                                colors = listOf(Color(0xFF0072FF), Color(0xFF00C6FF))
-                            )
-                        )
-                    }
-                    
                     Column(
-                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.End
                     ) {
-                        Spacer(modifier = Modifier.height(30.dp))
-                        
-                        // Avatar
-                        Surface(
-                            shape = androidx.compose.foundation.shape.CircleShape,
-                            color = Color(0xFF14171C),
-                            border = BorderStroke(3.dp, Color(0xFF1A1D24)),
-                            modifier = Modifier.size(80.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = user.displayName.take(1).uppercase(),
-                                    color = Color.White,
-                                    fontSize = 32.sp,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
-                        }
-                        
-                        Spacer(modifier = Modifier.height(12.dp))
-                        
                         Text(
-                            text = user.displayName,
+                            "تنظیم آدرس اتصال API",
                             color = Color.White,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 20.sp
-                        )
-                        Text(
-                            text = "@${user.username}",
-                            color = Color.Gray,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(top = 2.dp)
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
                         )
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                        // Role Badge
-                        Surface(
-                            color = when(user.role) {
-                                "SUPER_ADMIN" -> Color(0xFFE53935)
-                                "DEPT_ADMIN" -> Color(0xFFE64A19)
-                                "STAFF" -> Color(0xFF1E88E5)
-                                else -> Color(0xFF4CAF50)
-                            }.copy(alpha = 0.15f),
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, when(user.role) {
-                                "SUPER_ADMIN" -> Color(0xFFFF5252)
-                                "DEPT_ADMIN" -> Color(0xFFFF7043)
-                                "STAFF" -> Color(0xFF40C4FF)
-                                else -> Color(0xFF69F0AE)
-                            }.copy(alpha = 0.5f))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = if (user.role.contains("ADMIN")) Icons.Default.Verified else Icons.Default.Star,
-                                    contentDescription = null,
-                                    tint = when(user.role) {
-                                        "SUPER_ADMIN" -> Color(0xFFFF5252)
-                                        "DEPT_ADMIN" -> Color(0xFFFF7043)
-                                        "STAFF" -> Color(0xFF40C4FF)
-                                        else -> Color(0xFF69F0AE)
-                                    },
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = user.subRole,
-                                    color = when(user.role) {
-                                        "SUPER_ADMIN" -> Color(0xFFFF5252)
-                                        "DEPT_ADMIN" -> Color(0xFFFF7043)
-                                        "STAFF" -> Color(0xFF40C4FF)
-                                        else -> Color(0xFF69F0AE)
-                                    },
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
+                        OutlinedTextField(
+                            value = inputDomain,
+                            onValueChange = { inputDomain = it },
+                            placeholder = { Text("https://myketmanga.com/wp-json") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
 
-                        Spacer(modifier = Modifier.height(20.dp))
-                        
-                        // Wallet Stats Row
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Left Stat
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("موجودی کیف پول", color = Color.Gray, fontSize = 11.sp)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("${user.walletRial} تومان", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                            
-                            // Separator
-                            androidx.compose.material3.VerticalDivider(modifier = Modifier.height(30.dp), color = Color(0xFF272C35))
-                            
-                            // Right Stat
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("اعتبار فصول هدیه", color = Color.Gray, fontSize = 11.sp)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = Color(0xFF00C6FF), modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("${user.walletGiftChapters} چپتر", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        // Logout Button
-                        Button(
-                            onClick = {
-                                viewModel.switchUser(6)
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF14171C)),
-                            border = BorderStroke(1.dp, Color(0xFFD32F2F).copy(alpha = 0.5f)),
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(Icons.Default.Logout, contentDescription = null, tint = Color(0xFFFF5252), modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("خروج از حساب کاربری", color = Color(0xFFFF5252), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF14171C)),
-            border = BorderStroke(1.dp, Color(0xFF272C35)),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.End
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { loginMode = false; authError = ""; authSuccess = "" },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (!loginMode) Color(0xFF1A2D42) else Color.Transparent
-                        ),
-                        modifier = Modifier.weight(1f),
-                        border = if (!loginMode) BorderStroke(1.dp, Color(0xFF00C6FF)) else null,
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("تولید حساب (ثبت‌نام)", color = if (!loginMode) Color.White else Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Button(
-                        onClick = { loginMode = true; authError = ""; authSuccess = "" },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (loginMode) Color(0xFF1A2D42) else Color.Transparent
-                        ),
-                        modifier = Modifier.weight(1f),
-                        border = if (loginMode) BorderStroke(1.dp, Color(0xFF00C6FF)) else null,
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("ورود با گذرواژه", color = if (loginMode) Color.White else Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                if (authError.isNotBlank()) {
-                    Text(authError, color = Color(0xFFFF5252), fontSize = 11.sp, modifier = Modifier.padding(bottom = 10.dp), fontWeight = FontWeight.Medium)
-                }
-                if (authSuccess.isNotBlank()) {
-                    Text(authSuccess, color = Color(0xFF69F0AE), fontSize = 11.sp, modifier = Modifier.padding(bottom = 10.dp), fontWeight = FontWeight.Medium)
-                }
-
-                if (loginMode) {
-                    Text("نام کاربری انگلیسی خود را وارد کنید (*)", color = Color.LightGray, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
-                    OutlinedTextField(
-                        value = uUsername,
-                        onValueChange = { uUsername = it },
-                        placeholder = { Text("god_admin یا guest_user") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text("گذرواژه امن خود را وارد کنید (*)", color = Color.LightGray, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
-                    OutlinedTextField(
-                        value = uPassword,
-                        onValueChange = { uPassword = it },
-                        placeholder = { Text("مثال: 123456") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Button(
-                        onClick = {
-                            if (uUsername.isBlank() || uPassword.isBlank()) {
-                                authError = "نام کاربری و کلمه‌ی عبور الزامی است."
-                            } else {
-                                viewModel.loginUser(
-                                    usernameInput = uUsername.trim(),
-                                    passwordInput = uPassword,
-                                    onSuccess = {
-                                        authSuccess = "ورود با موفقیت انجام شد!"
-                                        authError = ""
-                                        uUsername = ""
-                                        uPassword = ""
-                                    },
-                                    onError = {
-                                        authError = it
-                                        authSuccess = ""
-                                    }
-                                )
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C6FF)),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("ورود امن به پنل", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    Text("نام کاربری انگلیسی جدید (*)", color = Color.LightGray, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
-                    OutlinedTextField(
-                        value = uUsername,
-                        onValueChange = { uUsername = it },
-                        placeholder = { Text("مثال: sina_cleaner") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text("نام و نام خانوادگی فارسی (*)", color = Color.LightGray, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
-                    OutlinedTextField(
-                        value = uDisplayName,
-                        onValueChange = { uDisplayName = it },
-                        placeholder = { Text("مثال: سینا شاهین") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text("گذرواژه انتخابی شما (*)", color = Color.LightGray, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
-                    OutlinedTextField(
-                        value = uPassword,
-                        onValueChange = { uPassword = it },
-                        placeholder = { Text("حداقل ۵ کاراکتر") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    if (currentUserAccount?.role == "SUPER_ADMIN") {
-                        Text("تعیین نقش تخصصی همکار (ویژه مدیریت کل)", color = Color(0xFFFFD700), fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            val options = listOf(
-                                Triple("STAFF", "مترجم", "مترجم تیم"),
-                                Triple("STAFF", "کلینر", "کلینر تیم"),
-                                Triple("STAFF", "تایپیست/ادیتور", "تایپیست/ادیتور"),
-                                Triple("DEPT_ADMIN", "مدیر ترجمه", "مدیر خط تولید"),
-                                Triple("NORMAL_USER", "کاربر عادی", "خواننده عادی")
-                            )
-                            options.forEach { opt ->
-                                val selected = selectedRoleOption == opt.first && selectedSubRoleName == opt.second
-                                FilterChip(
-                                    selected = selected,
-                                    onClick = {
-                                        selectedRoleOption = opt.first
-                                        selectedSubRoleName = opt.second
-                                    },
-                                    label = { Text(opt.third, fontSize = 10.sp) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = Color(0xFF1E88E5),
-                                        selectedLabelColor = Color.White
+                            if (showPingState) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = if (isDomainConnected) "متصل به دامنه" else "در حال راستی‌آزمایی...",
+                                        color = if (isDomainConnected) Color(0xFF59B259) else Color.Gray,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
                                     )
-                                )
+                                    if (isDomainConnected) {
+                                        Icon(Icons.Default.CheckCircle, contentDescription = "", tint = Color(0xFF59B259), modifier = Modifier.size(16.dp))
+                                    } else {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(12.dp),
+                                            strokeWidth = 1.5.dp,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.width(1.dp))
+                            }
+
+                            Button(
+                                onClick = {
+                                    viewModel.updateSiteDomain(inputDomain)
+                                    showPingState = true
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0055B3)),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("اعمال و بررسی پینگ", color = Color.White, fontSize = 11.sp)
                             }
                         }
-                    } else {
-                        Text(
-                            "نکته امنیتی: کاربران پس از استخدام رسمی توسط مدیریت کل، دسترسی‌های اختصاصی کادر تولید را دریافت خواهند کرد.",
-                            color = Color.Gray,
-                            fontSize = 9.sp,
-                            textAlign = TextAlign.Right,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                    Button(
-                        onClick = {
-                            if (uUsername.isBlank() || uDisplayName.isBlank() || uPassword.length < 5) {
-                                authError = "نام کاربری، نام واقعی و گذرواژه (حداقل ۵ کاراکتر) الزامی است."
-                            } else {
-                                viewModel.registerNewUser(
-                                    username = uUsername.trim(),
-                                    displayName = uDisplayName.trim(),
-                                    passwordInput = uPassword,
-                                    role = if (currentUserAccount?.role == "SUPER_ADMIN") selectedRoleOption else "NORMAL_USER",
-                                    subRole = if (currentUserAccount?.role == "SUPER_ADMIN") selectedSubRoleName else "کاربر عادی",
-                                    onSuccess = {
-                                        authSuccess = "حساب جدید با موفقیت ایجاد و فعال شد!"
-                                        authError = ""
-                                        uUsername = ""
-                                        uDisplayName = ""
-                                        uPassword = ""
-                                    },
-                                    onError = {
-                                        authError = it
-                                        authSuccess = ""
-                                    }
-                                )
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C6FF)),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
+                // Technical Guide for zero programmer setup
+                Text(
+                    "راهنمای راه‌اندازی هاست برای صاحب امتیاز:",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1D2024)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        horizontalAlignment = Alignment.End
                     ) {
-                        Text("ثبت‌نام و عضویت رسمی", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "۱. یک سایت با وردپرس (WordPress) روی هاست خود بسازید.\n" +
+                            "۲. پوسته رایگان Madara یا wp-manga را نصب کنید.\n" +
+                            "۳. افزونه‌های REST API پیشفرض را فعال بگذارید.\n" +
+                            "۴. دامنه خود را در کادر بالا وارد کنید تا مانهواهای شما مستقیما خوانده شوند!",
+                            color = Color.LightGray,
+                            fontSize = 11.sp,
+                            lineHeight = 20.sp,
+                            textAlign = TextAlign.Right
+                        )
                     }
                 }
             }
-        }
 
-        currentUserAccount?.let { user ->
             if (user.role == "SUPER_ADMIN" || user.role == "DEPT_ADMIN") {
                 Spacer(modifier = Modifier.height(24.dp))
                 AdminPanel(viewModel = viewModel)

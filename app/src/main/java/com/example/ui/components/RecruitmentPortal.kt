@@ -62,7 +62,7 @@ fun RecruitmentPortalCard(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("پورتال استخدام هوشمند تیم کرونکو", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black)
+                    Text("پورتال استخدام هوشمند تیم مانگاتا", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black)
                     Text("کسب درآمد پویا + اهدای چپتر‌های رایگان همکاران", color = Color.White.copy(alpha = 0.82f), fontSize = 11.sp)
                 }
 
@@ -103,7 +103,7 @@ fun RecruitmentApplyDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "استخدام کادر ترجمه تیم کرونکو (Kronco)",
+                text = "استخدام کادر ترجمه تیم مانگاتا (Mangata)",
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
@@ -151,19 +151,34 @@ fun RecruitmentApplyDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                val trnActive by viewModel.isTranslatorTestUploaded.collectAsState()
+                val clnActive by viewModel.isCleanerTestUploaded.collectAsState()
+                val typActive by viewModel.isTypistTestUploaded.collectAsState()
+
                 Text("تخصص درخواستی را انتخاب کنید:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    listOf("کلینر", "تایپیست/ادیتور", "مترجم").forEach { specialty ->
+                    val specialties = listOf(
+                        Triple("کلینر", "کلینر", clnActive),
+                        Triple("تایپیست/ادیتور", "تایپیست/ادیتور", typActive),
+                        Triple("مترجم", "مترجم", trnActive)
+                    )
+                    specialties.forEach { (label, specialty, active) ->
                         val isSelected = selectedSpecialty == specialty
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) Color(0xFF0072FF) else Color(0xFF1D2024))
-                                .clickable {
+                                .background(
+                                    when {
+                                        !active -> Color(0xFF151515) // Disabled state color
+                                        isSelected -> Color(0xFF0072FF)
+                                        else -> Color(0xFF1D2024)
+                                    }
+                                )
+                                .clickable(enabled = active) {
                                     selectedSpecialty = specialty
                                     rawTestFileDownloaded = false
                                     solutionUploaded = false
@@ -171,7 +186,7 @@ fun RecruitmentApplyDialog(
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(specialty, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(label, color = if (active) Color.White else Color.DarkGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
