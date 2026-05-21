@@ -43,6 +43,7 @@ fun MangaReaderView(
     manga: MangaEntity,
     initialChapter: Int,
     isVerticalMode: Boolean,
+    viewModel: com.example.ui.MovieViewModel,
     onClose: () -> Unit,
     onChapterChanged: (Int) -> Unit,
     onProgressUpdated: (Int, Float) -> Unit,
@@ -55,6 +56,10 @@ fun MangaReaderView(
     var brightnessSetting by remember { mutableStateOf(1.0f) }
 
     val context = LocalContext.current
+    val downloadedChaptersMap by viewModel.downloadedChapters.collectAsState()
+    val isDownloaded = remember(manga.id, activeChapter, downloadedChaptersMap) {
+        downloadedChaptersMap[manga.id]?.contains(activeChapter) == true
+    }
 
     // Parse image page URLs from the JSON
     val pageImages = remember(manga, activeChapter) {
@@ -112,15 +117,12 @@ fun MangaReaderView(
                             val uniqueId = UUID.randomUUID().toString().take(8)
                             if (pageUrl.contains("?")) "$pageUrl&sec_tok=tmp_$uniqueId" else "$pageUrl?sec_tok=tmp_$uniqueId"
                         }
-                        val imageRequest = remember(secureUrl) {
-                            ImageRequest.Builder(context)
-                                .data(secureUrl)
-                                .diskCachePolicy(CachePolicy.DISABLED)
-                                .memoryCachePolicy(CachePolicy.DISABLED)
-                                .build()
-                        }
-                        AsyncImage(
-                            model = imageRequest,
+                        EncryptedOrNetworkImage(
+                            url = secureUrl,
+                            mangaId = manga.id,
+                            chapterNumber = activeChapter,
+                            pageNumber = index + 1,
+                            isDownloaded = isDownloaded,
                             contentDescription = "صفحه ${index + 1} از مانهوا ${manga.titleFa}",
                             contentScale = ContentScale.FillWidth,
                             modifier = Modifier
@@ -154,19 +156,16 @@ fun MangaReaderView(
                         val uniqueId = UUID.randomUUID().toString().take(8)
                         if (pageUrl.contains("?")) "$pageUrl&sec_tok=tmp_$uniqueId" else "$pageUrl?sec_tok=tmp_$uniqueId"
                     }
-                    val imageRequest = remember(secureUrl) {
-                        ImageRequest.Builder(context)
-                            .data(secureUrl)
-                            .diskCachePolicy(CachePolicy.DISABLED)
-                            .memoryCachePolicy(CachePolicy.DISABLED)
-                            .build()
-                    }
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        AsyncImage(
-                            model = imageRequest,
+                        EncryptedOrNetworkImage(
+                            url = secureUrl,
+                            mangaId = manga.id,
+                            chapterNumber = activeChapter,
+                            pageNumber = page + 1,
+                            isDownloaded = isDownloaded,
                             contentDescription = "صفحه ${page + 1} از مانهوا ${manga.titleFa}",
                             contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize()

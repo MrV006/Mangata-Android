@@ -15,5 +15,6 @@ data class UserAccount(
     val chaptersContributedLastMonth: Int = 0,
     val chaptersContributedThisMonth: Int = 0,
     val storyTokens: Int = 0,
-    val customRewardRate: Int? = null // Individual reward chapter overrides
+    val customRewardRate: Int? = null, // Individual reward chapter overrides
+    val password: String = "123456"
 )

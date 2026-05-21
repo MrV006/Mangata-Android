@@ -56,6 +56,10 @@ class MangaRepository(private val mangaDao: MangaDao) {
         mangaDao.insertMangas(listOf(manga))
     }
 
+    suspend fun insertAllMangas(mangas: List<MangaEntity>) {
+        mangaDao.insertMangas(mangas)
+    }
+
     // --- Advanced Features Repository ---
 
     val allUserAccounts: Flow<List<UserAccount>> = mangaDao.getAllUserAccounts()
@@ -78,6 +82,16 @@ class MangaRepository(private val mangaDao: MangaDao) {
     fun getPurchasedChapters(userId: Int): Flow<List<ChapterPurchaseRecord>> = mangaDao.getPurchasedChapters(userId)
     fun isChapterUnlocked(userId: Int, mangaId: Int, chapterNumber: Int): Flow<Boolean> = mangaDao.isChapterUnlocked(userId, mangaId, chapterNumber)
     suspend fun insertChapterPurchase(record: ChapterPurchaseRecord) = mangaDao.insertChapterPurchase(record)
+
+    val allSupportTickets: Flow<List<SupportTicket>> = mangaDao.getAllSupportTickets()
+    fun getSupportTicketsByUserId(userId: Int): Flow<List<SupportTicket>> = mangaDao.getSupportTicketsByUserId(userId)
+    suspend fun insertSupportTicket(ticket: SupportTicket) = mangaDao.insertSupportTicket(ticket)
+
+    // Chapter Work tracking
+    val allChapterWorks: Flow<List<ChapterWork>> = mangaDao.getAllChapterWorks()
+    fun getChapterWorkByMangaAndNumber(mangaId: Int, chapterNumber: Int) = mangaDao.getChapterWorkByMangaAndNumber(mangaId, chapterNumber)
+    suspend fun getChapterWorkByMangaAndNumberOneShot(mangaId: Int, chapterNumber: Int) = mangaDao.getChapterWorkByMangaAndNumberOneShot(mangaId, chapterNumber)
+    suspend fun insertChapterWork(work: ChapterWork) = mangaDao.insertChapterWork(work)
 
     suspend fun seedDatabase() {
         // Only seed if empty
@@ -249,5 +263,13 @@ class MangaRepository(private val mangaDao: MangaDao) {
             UserAccount(id = 6, username = "guest_user", displayName = "کاربر مهمان", role = "NORMAL_USER", subRole = "کاربر عادی", walletRial = 4800, walletGiftChapters = 3, chaptersContributedLastMonth = 0, chaptersContributedThisMonth = 0, storyTokens = 0)
         )
         seedUsers.forEach { mangaDao.insertUserAccount(it) }
+
+        // Seed initial chapter works for realistic dashboard statistics
+        val seedChapterWorks = listOf(
+            ChapterWork(mangaId = 1, mangaTitle = "سولو لولینگ (تک‌رو)", chapterNumber = 1, translatorId = 5, translatorName = "نازنین راد", cleanerId = 3, cleanerName = "سینا زارع", editorId = 4, editorName = "تینا مهدوی", revenueEarned = 10000, translatorPaid = 3500, cleanerPaid = 2000, editorPaid = 2500, platformEarned = 2000),
+            ChapterWork(mangaId = 1, mangaTitle = "سولو لولینگ (تک‌رو)", chapterNumber = 2, translatorId = 5, translatorName = "نازنین راد", cleanerId = 3, cleanerName = "سینا زارع", editorId = 4, editorName = "تینا مهدوی", revenueEarned = 15000, translatorPaid = 5250, cleanerPaid = 3000, editorPaid = 3750, platformEarned = 3000),
+            ChapterWork(mangaId = 2, mangaTitle = "برج خدا", chapterNumber = 1, translatorId = 2, translatorName = "مهدی خسروی", cleanerId = 3, cleanerName = "سینا زارع", editorId = 4, editorName = "تینا مهدوی", revenueEarned = 12000, translatorPaid = 4200, cleanerPaid = 2400, editorPaid = 3000, platformEarned = 2400)
+        )
+        seedChapterWorks.forEach { mangaDao.insertChapterWork(it) }
     }
 }

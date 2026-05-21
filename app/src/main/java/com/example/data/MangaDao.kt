@@ -127,4 +127,27 @@ interface MangaDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertChapterPurchase(record: ChapterPurchaseRecord)
+
+    // Support Ticket queries
+    @Query("SELECT * FROM support_tickets ORDER BY id DESC")
+    fun getAllSupportTickets(): Flow<List<SupportTicket>>
+
+    @Query("SELECT * FROM support_tickets WHERE userId = :userId ORDER BY id DESC")
+    fun getSupportTicketsByUserId(userId: Int): Flow<List<SupportTicket>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSupportTicket(ticket: SupportTicket)
+
+    // Chapter Work tracking queries
+    @Query("SELECT * FROM chapter_works ORDER BY id DESC")
+    fun getAllChapterWorks(): Flow<List<ChapterWork>>
+
+    @Query("SELECT * FROM chapter_works WHERE mangaId = :mangaId AND chapterNumber = :chapterNumber")
+    fun getChapterWorkByMangaAndNumber(mangaId: Int, chapterNumber: Int): Flow<ChapterWork?>
+
+    @Query("SELECT * FROM chapter_works WHERE mangaId = :mangaId AND chapterNumber = :chapterNumber")
+    suspend fun getChapterWorkByMangaAndNumberOneShot(mangaId: Int, chapterNumber: Int): ChapterWork?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertChapterWork(work: ChapterWork)
 }

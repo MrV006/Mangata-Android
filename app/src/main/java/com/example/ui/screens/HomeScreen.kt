@@ -38,6 +38,7 @@ import com.example.ui.components.StaffDashboard
 import com.example.ui.components.AdminPanel
 import com.example.ui.components.ForcedUpdateScreen
 import com.example.ui.components.ChapterUnlockDialog
+import com.example.ui.components.SupportTicketSystem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -193,6 +194,7 @@ fun HomeScreen(viewModel: MovieViewModel) {
                         manga = manga,
                         initialChapter = activeChapter,
                         isVerticalMode = isVerticalMode,
+                        viewModel = viewModel,
                         onClose = { viewModel.closeReader() },
                         onChapterChanged = { chapterIndex ->
                             viewModel.setChapter(chapterIndex)
@@ -1129,6 +1131,28 @@ fun StoreDashboard(viewModel: MovieViewModel) {
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(20.dp))
+        HorizontalDivider(color = Color(0xFF2D3139))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            "بخش درگاه مستقیم بانکی (به زودی)",
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
+        Text(
+            "پرداخت و شارژ آنی دیسک با کارت‌های عضو شتاب فعال به زودی به عنوان روش ثانویه متصل خواهد شد. در حال حاضر، جهت شارژ دستی حساب لطفاً از فرم ثبت تیکت مالی در زیر اقدام کنید تا مشخصات حساب بانکی معتبر ارسال گردد.",
+            color = Color.LightGray,
+            fontSize = 11.sp,
+            textAlign = TextAlign.Right,
+            lineHeight = 18.sp,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        SupportTicketSystem(viewModel = viewModel)
     }
 }
 
@@ -1139,6 +1163,9 @@ fun SettingsDashboard(viewModel: MovieViewModel) {
 
     var inputDomain by remember { mutableStateOf(siteDomain) }
     var showPingState by remember { mutableStateOf(false) }
+
+    var regUsername by remember { mutableStateOf("") }
+    var regDisplayName by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -1270,9 +1297,8 @@ fun SettingsDashboard(viewModel: MovieViewModel) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Simulated Account Switcher for Evaluators to verify scenarios
         Text(
-            "شبیه‌ساز هویت و رول کاربر (محیط آزمون دمو)",
+            "سامانه مدیریت هویت و ورود ایمن به پلتفرم",
             color = Color.White,
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
@@ -1280,51 +1306,427 @@ fun SettingsDashboard(viewModel: MovieViewModel) {
         )
 
         Text(
-            "بین رول‌های زیر جابجا شده و تغییر درهای بسته‌شده، پنل همکاران، تقسیم درآمدها و قفل‌های چپترها را بلادرنگ امتحان کنید:",
+            "برای دسترسی به پنل‌های پیشرفته با توجه به نقش خود (مدیر، کلینر، ادیتور، مترجم یا کاربر عادی) از درگاه امن زیر وارد شوید. ارائه‌ی دسترسی مراجع عالی صرفاً از طریق هویت‌سنجی معتبر امکان‌پذیر است:",
             color = Color.Gray,
             fontSize = 11.sp,
             textAlign = TextAlign.Right,
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        val userAccounts by viewModel.userAccounts.collectAsState()
         val currentUserAccount by viewModel.currentUserAccount.collectAsState()
+        val userAccounts by viewModel.userAccounts.collectAsState()
 
-        userAccounts.forEach { account ->
-            val isSelected = currentUserAccount?.id == account.id
+        var loginMode by remember { mutableStateOf(true) } // true: Login, false: Register
+        
+        var uUsername by remember { mutableStateOf("") }
+        var uPassword by remember { mutableStateOf("") }
+        var uDisplayName by remember { mutableStateOf("") }
+        
+        // Selected role for registration
+        var selectedRoleOption by remember { mutableStateOf("NORMAL_USER") }
+        var selectedSubRoleName by remember { mutableStateOf("کاربر عادی") }
+
+        var authError by remember { mutableStateOf("") }
+        var authSuccess by remember { mutableStateOf("") }
+
+        // Let's render either User Account summary or Login/Register forms
+        if (currentUserAccount != null) {
+            val user = currentUserAccount!!
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-                    .clickable { viewModel.switchUser(account.id) },
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isSelected) Color(0xFF132235) else Color(0xFF16191E)
-                ),
-                border = BorderStroke(1.dp, if (isSelected) Color(0xFF00C6FF) else Color(0xFF2D3139)),
-                shape = RoundedCornerShape(12.dp)
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1D24)),
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Header Background Profile Design
+                    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().height(100.dp)) {
+                        val canvasWidth = size.width
+                        val canvasHeight = size.height
+                        val path = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(0f, 0f)
+                            lineTo(canvasWidth, 0f)
+                            lineTo(canvasWidth, canvasHeight * 0.7f)
+                            quadraticBezierTo(
+                                canvasWidth / 2, canvasHeight * 1.1f,
+                                0f, canvasHeight * 0.7f
+                            )
+                            close()
+                        }
+                        drawPath(
+                            path = path,
+                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                colors = listOf(Color(0xFF0072FF), Color(0xFF00C6FF))
+                            )
+                        )
+                    }
+                    
+                    Column(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Spacer(modifier = Modifier.height(30.dp))
+                        
+                        // Avatar
+                        Surface(
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = Color(0xFF14171C),
+                            border = BorderStroke(3.dp, Color(0xFF1A1D24)),
+                            modifier = Modifier.size(80.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = user.displayName.take(1).uppercase(),
+                                    color = Color.White,
+                                    fontSize = 32.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Text(
+                            text = user.displayName,
+                            color = Color.White,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 20.sp
+                        )
+                        Text(
+                            text = "@${user.username}",
+                            color = Color.Gray,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Role Badge
+                        Surface(
+                            color = when(user.role) {
+                                "SUPER_ADMIN" -> Color(0xFFE53935)
+                                "DEPT_ADMIN" -> Color(0xFFE64A19)
+                                "STAFF" -> Color(0xFF1E88E5)
+                                else -> Color(0xFF4CAF50)
+                            }.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, when(user.role) {
+                                "SUPER_ADMIN" -> Color(0xFFFF5252)
+                                "DEPT_ADMIN" -> Color(0xFFFF7043)
+                                "STAFF" -> Color(0xFF40C4FF)
+                                else -> Color(0xFF69F0AE)
+                            }.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (user.role.contains("ADMIN")) Icons.Default.Verified else Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = when(user.role) {
+                                        "SUPER_ADMIN" -> Color(0xFFFF5252)
+                                        "DEPT_ADMIN" -> Color(0xFFFF7043)
+                                        "STAFF" -> Color(0xFF40C4FF)
+                                        else -> Color(0xFF69F0AE)
+                                    },
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = user.subRole,
+                                    color = when(user.role) {
+                                        "SUPER_ADMIN" -> Color(0xFFFF5252)
+                                        "DEPT_ADMIN" -> Color(0xFFFF7043)
+                                        "STAFF" -> Color(0xFF40C4FF)
+                                        else -> Color(0xFF69F0AE)
+                                    },
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+                        
+                        // Wallet Stats Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Left Stat
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("موجودی کیف پول", color = Color.Gray, fontSize = 11.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("${user.walletRial} تومان", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            
+                            // Separator
+                            androidx.compose.material3.VerticalDivider(modifier = Modifier.height(30.dp), color = Color(0xFF272C35))
+                            
+                            // Right Stat
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("اعتبار فصول هدیه", color = Color.Gray, fontSize = 11.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = Color(0xFF00C6FF), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("${user.walletGiftChapters} چپتر", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Logout Button
+                        Button(
+                            onClick = {
+                                viewModel.switchUser(6)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF14171C)),
+                            border = BorderStroke(1.dp, Color(0xFFD32F2F).copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Logout, contentDescription = null, tint = Color(0xFFFF5252), modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("خروج از حساب کاربری", color = Color(0xFFFF5252), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF14171C)),
+            border = BorderStroke(1.dp, Color(0xFF272C35)),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.End
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (isSelected) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(8.dp).background(Color(0xFF59B259), CircleShape))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("کاربر فعال شما", color = Color(0xFF59B259), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    } else {
-                        Text("کلیک جهت فعال‌سازی رول", color = Color.Gray, fontSize = 9.sp)
+                    Button(
+                        onClick = { loginMode = false; authError = ""; authSuccess = "" },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (!loginMode) Color(0xFF1A2D42) else Color.Transparent
+                        ),
+                        modifier = Modifier.weight(1f),
+                        border = if (!loginMode) BorderStroke(1.dp, Color(0xFF00C6FF)) else null,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("تولید حساب (ثبت‌نام)", color = if (!loginMode) Color.White else Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(account.displayName, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        Text("سمت: ${account.subRole}", color = Color.LightGray, fontSize = 11.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("اعتبار: ${account.walletRial} تومان", color = Color(0xFFFFD700), fontSize = 9.sp)
-                            Text("کوپن: ${account.walletGiftChapters} عدد", color = Color(0xFF00C6FF), fontSize = 9.sp)
+                    Button(
+                        onClick = { loginMode = true; authError = ""; authSuccess = "" },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (loginMode) Color(0xFF1A2D42) else Color.Transparent
+                        ),
+                        modifier = Modifier.weight(1f),
+                        border = if (loginMode) BorderStroke(1.dp, Color(0xFF00C6FF)) else null,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("ورود با گذرواژه", color = if (loginMode) Color.White else Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (authError.isNotBlank()) {
+                    Text(authError, color = Color(0xFFFF5252), fontSize = 11.sp, modifier = Modifier.padding(bottom = 10.dp), fontWeight = FontWeight.Medium)
+                }
+                if (authSuccess.isNotBlank()) {
+                    Text(authSuccess, color = Color(0xFF69F0AE), fontSize = 11.sp, modifier = Modifier.padding(bottom = 10.dp), fontWeight = FontWeight.Medium)
+                }
+
+                if (loginMode) {
+                    Text("نام کاربری انگلیسی خود را وارد کنید (*)", color = Color.LightGray, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
+                    OutlinedTextField(
+                        value = uUsername,
+                        onValueChange = { uUsername = it },
+                        placeholder = { Text("god_admin یا guest_user") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text("گذرواژه امن خود را وارد کنید (*)", color = Color.LightGray, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
+                    OutlinedTextField(
+                        value = uPassword,
+                        onValueChange = { uPassword = it },
+                        placeholder = { Text("مثال: 123456") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = {
+                            if (uUsername.isBlank() || uPassword.isBlank()) {
+                                authError = "نام کاربری و کلمه‌ی عبور الزامی است."
+                            } else {
+                                viewModel.loginUser(
+                                    usernameInput = uUsername.trim(),
+                                    passwordInput = uPassword,
+                                    onSuccess = {
+                                        authSuccess = "ورود با موفقیت انجام شد!"
+                                        authError = ""
+                                        uUsername = ""
+                                        uPassword = ""
+                                    },
+                                    onError = {
+                                        authError = it
+                                        authSuccess = ""
+                                    }
+                                )
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C6FF)),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("ورود امن به پنل", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Text("نام کاربری انگلیسی جدید (*)", color = Color.LightGray, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
+                    OutlinedTextField(
+                        value = uUsername,
+                        onValueChange = { uUsername = it },
+                        placeholder = { Text("مثال: sina_cleaner") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text("نام و نام خانوادگی فارسی (*)", color = Color.LightGray, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
+                    OutlinedTextField(
+                        value = uDisplayName,
+                        onValueChange = { uDisplayName = it },
+                        placeholder = { Text("مثال: سینا شاهین") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text("گذرواژه انتخابی شما (*)", color = Color.LightGray, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
+                    OutlinedTextField(
+                        value = uPassword,
+                        onValueChange = { uPassword = it },
+                        placeholder = { Text("حداقل ۵ کاراکتر") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (currentUserAccount?.role == "SUPER_ADMIN") {
+                        Text("تعیین نقش تخصصی همکار (ویژه مدیریت کل)", color = Color(0xFFFFD700), fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val options = listOf(
+                                Triple("STAFF", "مترجم", "مترجم تیم"),
+                                Triple("STAFF", "کلینر", "کلینر تیم"),
+                                Triple("STAFF", "تایپیست/ادیتور", "تایپیست/ادیتور"),
+                                Triple("DEPT_ADMIN", "مدیر ترجمه", "مدیر خط تولید"),
+                                Triple("NORMAL_USER", "کاربر عادی", "خواننده عادی")
+                            )
+                            options.forEach { opt ->
+                                val selected = selectedRoleOption == opt.first && selectedSubRoleName == opt.second
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = {
+                                        selectedRoleOption = opt.first
+                                        selectedSubRoleName = opt.second
+                                    },
+                                    label = { Text(opt.third, fontSize = 10.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Color(0xFF1E88E5),
+                                        selectedLabelColor = Color.White
+                                    )
+                                )
+                            }
                         }
+                    } else {
+                        Text(
+                            "نکته امنیتی: کاربران پس از استخدام رسمی توسط مدیریت کل، دسترسی‌های اختصاصی کادر تولید را دریافت خواهند کرد.",
+                            color = Color.Gray,
+                            fontSize = 9.sp,
+                            textAlign = TextAlign.Right,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = {
+                            if (uUsername.isBlank() || uDisplayName.isBlank() || uPassword.length < 5) {
+                                authError = "نام کاربری، نام واقعی و گذرواژه (حداقل ۵ کاراکتر) الزامی است."
+                            } else {
+                                viewModel.registerNewUser(
+                                    username = uUsername.trim(),
+                                    displayName = uDisplayName.trim(),
+                                    passwordInput = uPassword,
+                                    role = if (currentUserAccount?.role == "SUPER_ADMIN") selectedRoleOption else "NORMAL_USER",
+                                    subRole = if (currentUserAccount?.role == "SUPER_ADMIN") selectedSubRoleName else "کاربر عادی",
+                                    onSuccess = {
+                                        authSuccess = "حساب جدید با موفقیت ایجاد و فعال شد!"
+                                        authError = ""
+                                        uUsername = ""
+                                        uDisplayName = ""
+                                        uPassword = ""
+                                    },
+                                    onError = {
+                                        authError = it
+                                        authSuccess = ""
+                                    }
+                                )
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C6FF)),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("ثبت‌نام و عضویت رسمی", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1347,11 +1749,18 @@ fun MangaDetailOverlay(
     isVipActive: Boolean,
     onClose: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val isBookmarked by viewModel.isBookmarked(manga.id).collectAsState(false)
     val readHistory by viewModel.getHistoryForManga(manga.id).collectAsState(null)
     val aiSummary by viewModel.aiSummaryState.collectAsState()
     val startsFromZeroMap by viewModel.mangaStartsFromZero.collectAsState()
     val startsFromZero = startsFromZeroMap[manga.id] ?: false
+    val downloadedChaptersMap by viewModel.downloadedChapters.collectAsState()
+    val downloadProgressMap by viewModel.downloadProgress.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.updateDownloadedChapters(context)
+    }
 
     val currentUser by viewModel.currentUserAccount.collectAsState()
     val purchasedList by if (currentUser != null) {
@@ -1566,16 +1975,51 @@ fun MangaDetailOverlay(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (isUnlocked) {
-                            if (isPurchased) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Text("خریداری شده", color = Color(0xFF59B259), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                    Icon(Icons.Default.LockOpen, contentDescription = "آزاد شده", tint = Color(0xFF59B259), modifier = Modifier.size(14.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                val downloadKey = "${manga.id}_$ch"
+                                val downloadProgress = downloadProgressMap[downloadKey]
+                                val isDownloaded = downloadedChaptersMap[manga.id]?.contains(ch) == true
+
+                                if (isDownloaded) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "دانلود شده",
+                                        tint = Color(0xFF59B259),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                } else if (downloadProgress != null) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        progress = { downloadProgress },
+                                        modifier = Modifier.size(16.dp),
+                                        color = Color(0xFF00C6FF),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = "دانلود آفلاین",
+                                        tint = Color(0xFF00C6FF),
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .clickable {
+                                                viewModel.downloadChapterOffline(context, manga.id, ch, manga.pagesJson)
+                                            }
+                                    )
                                 }
-                            } else {
-                                Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = Color.LightGray)
+                                if (isPurchased) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("خریداری شده", color = Color(0xFF59B259), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Icon(Icons.Default.LockOpen, contentDescription = "آزاد", tint = Color(0xFF59B259), modifier = Modifier.size(14.dp))
+                                    }
+                                } else {
+                                    Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = Color.LightGray)
+                                }
                             }
                         } else {
                             Row(

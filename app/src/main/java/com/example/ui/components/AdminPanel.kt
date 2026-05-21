@@ -1,11 +1,14 @@
 package com.example.ui.components
 
 import android.widget.Toast
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -34,6 +37,8 @@ fun AdminPanel(viewModel: MovieViewModel) {
     val accounts by viewModel.userAccounts.collectAsState()
     val settings by viewModel.systemSettings.collectAsState()
     val recruitments by viewModel.recruitmentApps.collectAsState()
+    val allTickets by viewModel.allSupportTickets.collectAsState()
+    val unansweredCount = allTickets.count { !it.isAnswered }
     val context = LocalContext.current
 
     var selectedAdminSubTab by remember { mutableStateOf("تنظیمات") } // "تنظیمات", "مشارکت‌ها", "استخدام‌ها", "نسخه‌ها", "مدیریت آثار & آپلود"
@@ -52,10 +57,55 @@ fun AdminPanel(viewModel: MovieViewModel) {
             border = BorderStroke(1.dp, Color(0xFFFFD700)),
             shape = RoundedCornerShape(16.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.End
-            ) {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                // Live Support Notification Ring
+                if (unansweredCount > 0) {
+                    val infiniteTransition = rememberInfiniteTransition(label = "neon_pulse")
+                    val pulseAlpha by infiniteTransition.animateFloat(
+                        initialValue = 0.4f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1000, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "pulseAlpha"
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(12.dp)
+                            .background(
+                                color = Color(0xFFFF1744).copy(alpha = 0.15f * pulseAlpha),
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                            .border(
+                                width = 1.6.dp,
+                                color = Color(0xFFFF1744).copy(alpha = pulseAlpha),
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(Color(0xFFFF1744), shape = CircleShape)
+                        )
+                        Text(
+                            text = "$unansweredCount تیکت معلق",
+                            color = Color(0xFFFFD2D2),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -83,6 +133,7 @@ fun AdminPanel(viewModel: MovieViewModel) {
                     textAlign = TextAlign.Right
                 )
             }
+          }
         }
 
         // Sub tabs
@@ -353,15 +404,18 @@ fun AdminUserCollaboration(viewModel: MovieViewModel, accounts: List<UserAccount
                             Box(
                                 modifier = Modifier
                                     .background(
-                                        if (account.role == "SUPER_ADMIN") Color(0xFFFF9800)
-                                        else if (account.role == "DEPT_ADMIN") Color(0xFF9C27B0)
-                                        else if (account.role == "STAFF") Color(0xFF00C6FF)
-                                        else Color.Gray,
-                                        RoundedCornerShape(4.dp)
+                                        color = when (account.role) {
+                                            "SUPER_ADMIN" -> Color(0xFFFFD700)
+                                            "ADMIN" -> Color(0xFFE57373)
+                                            "DEPT_ADMIN" -> Color(0xFF9C27B0)
+                                            "STAFF" -> Color(0xFF4CAF50)
+                                            else -> Color(0xFF90A4AE)
+                                        },
+                                        shape = RoundedCornerShape(4.dp)
                                     )
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
-                                Text(account.role, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                Text(account.role, color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                             }
 
                             Text(account.displayName + " (${account.subRole})", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -379,37 +433,395 @@ fun AdminUserCollaboration(viewModel: MovieViewModel, accounts: List<UserAccount
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // Actions for admin
-                        Row(
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Button(
-                                onClick = {
-                                    viewModel.awardGiftChapters(account.id, 10)
-                                    Toast.makeText(context, "۱۰ فصل هدیه با کرم مدیر تایید و تزریق شد.", Toast.LENGTH_SHORT).show()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0055B3)),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                shape = RoundedCornerShape(6.dp),
-                                modifier = Modifier.weight(1f).height(32.dp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text("+۱۰ کوپن رایگان", fontSize = 9.sp, color = Color.White)
+                                Button(
+                                    onClick = {
+                                        viewModel.awardGiftChapters(account.id, 10)
+                                        Toast.makeText(context, "۱۰ فصل هدیه با کرم مدیر تایید و تزریق شد.", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0D47A1)),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.weight(1f).height(28.dp)
+                                ) {
+                                    Text("+۱۰ کوپن ویژه", fontSize = 8.sp, color = Color.White)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        val updated = account.copy(role = "STAFF", subRole = "مترجم تیم", storyTokens = 4)
+                                        viewModel.updateUserAccount(updated)
+                                        Toast.makeText(context, "نقش ${account.displayName} به عضویت کادر فنی مانگا ترفیع یافت.", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20)),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.weight(1f).height(28.dp)
+                                ) {
+                                    Text("ارتقا به کادر فنی", fontSize = 8.sp, color = Color.White)
+                                }
                             }
 
-                            Button(
-                                onClick = {
-                                    // Change role dynamically to Staff translator
-                                    val updated = account.copy(role = "STAFF", subRole = "مترجم کارکشته", storyTokens = 4)
-                                    viewModel.updateSystemSettings(SystemSettingsEntity()) // simple repository access, actually we can call viewModelState updating
-                                    viewModel.switchUser(account.id) // simulate
-                                    Toast.makeText(context, "${account.displayName} به رول STAFF ارتقا یافت.", Toast.LENGTH_SHORT).show()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF59B259)),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                shape = RoundedCornerShape(6.dp),
-                                modifier = Modifier.weight(1f).height(32.dp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text("ارتقا به کادر ترجمه", fontSize = 9.sp)
+                                Button(
+                                    onClick = {
+                                        val updated = account.copy(role = "DEPT_ADMIN", subRole = "مدیر بخش تیکت‌ها")
+                                        viewModel.updateUserAccount(updated)
+                                        Toast.makeText(context, "${account.displayName} به رول ادمین بخش (پاسخ‌دهنده تیکت) ارتقا یافت.", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4A148C)),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.weight(1.1f).height(28.dp)
+                                ) {
+                                    Text("انتصاب به عنوان ناظر تیکت", fontSize = 8.sp, color = Color.White)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        val updated = account.copy(role = "NORMAL_USER", subRole = "خواننده عادی")
+                                        viewModel.updateUserAccount(updated)
+                                        Toast.makeText(context, "دسترسی‌های ${account.displayName} بازنشانی و عادی شد.", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB71C1C)),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.weight(0.9f).height(28.dp)
+                                ) {
+                                    Text("تنزل به کاربر عادی", fontSize = 8.sp, color = Color.White)
+                                }
+                            }
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        val toPay = account.walletRial
+                                        if (toPay > 0) {
+                                            val updated = account.copy(walletRial = 0)
+                                            viewModel.updateUserAccount(updated)
+                                            Toast.makeText(context, "تسویه حساب: مبلغ ${toPay} تومان برای ${account.displayName} واریز و صفر شد.", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            Toast.makeText(context, "موجودی این کاربر صفر است.", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.weight(1f).height(28.dp)
+                                ) {
+                                    Text("تسویه حساب مالی دوره‌ای", fontSize = 8.sp, color = Color.Black, fontWeight = FontWeight.Bold)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        val updated = account.copy(role = "BANNED", subRole = "کاربر مسدود شده")
+                                        viewModel.updateUserAccount(updated)
+                                        Toast.makeText(context, "کاربر ${account.displayName} با موفقیت مسدود و تعلیق شد.", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.weight(1f).height(28.dp)
+                                ) {
+                                    Text("مسدودسازی / تعلیق اکانت", fontSize = 8.sp, color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+            
+            // Revenue Monitoring & Error Adjustment Tool Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF16191E)),
+                border = BorderStroke(1.dp, Color(0xFFFFD700)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text(
+                        "مالی: تراز زنده مشارکت‌ها و اصلاح واریزی‌های اشتباه",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 13.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        "در این بخش می‌توانید درآمد جزء به جزء هر چپتر مانهوا را مشاهده، تحلیل و مانیتور کرده و در صورت بروز خطا در واریزی دستی یا اتوماتیک همکاران، فوراً مبالغ را بازگردانی و اصلاح فرمایید.",
+                        color = Color.Gray,
+                        fontSize = 10.sp,
+                        textAlign = TextAlign.Right,
+                        lineHeight = 16.sp
+                    )
+
+                    val chapterWorks by viewModel.allChapterWorks.collectAsState()
+                    
+                    // Correction fields states
+                    var selectedWorkForAdj by remember { mutableStateOf<com.example.data.ChapterWork?>(null) }
+                    var adjustTransId by remember { mutableStateOf("") }
+                    var adjustCleanId by remember { mutableStateOf("") }
+                    var adjustEditId by remember { mutableStateOf("") }
+                    var adjustmentError by remember { mutableStateOf("") }
+
+                    if (selectedWorkForAdj != null) {
+                        val wk = selectedWorkForAdj!!
+                        // Adjustment Form Box
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF231C13)),
+                            border = BorderStroke(1.dp, Color(0xFFFF9800)),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "فرم لایو جابجایی کادر همکاران مانهوا و اصلاح خودکار مالی",
+                                    color = Color(0xFFFF9800),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "مانهوا #${wk.mangaId}، فصل #${wk.chapterNumber}. با وارد نمودن کدهای همکاران معتبر جدید، کل درآمد این چپتر مستقیماً از اعضای قبلی برداشته شده و به کادر جدید تخصیص می‌یابد.",
+                                    color = Color.LightGray,
+                                    fontSize = 9.sp,
+                                    textAlign = TextAlign.Right
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                OutlinedTextField(
+                                    value = adjustTransId,
+                                    onValueChange = { adjustTransId = it },
+                                    placeholder = { Text("آیدی مترجم معتبر جدید (فعلی: ${wk.translatorId})") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                OutlinedTextField(
+                                    value = adjustCleanId,
+                                    onValueChange = { adjustCleanId = it },
+                                    placeholder = { Text("آیدی کلینر معتبر جدید (فعلی: ${wk.cleanerId})") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                OutlinedTextField(
+                                    value = adjustEditId,
+                                    onValueChange = { adjustEditId = it },
+                                    placeholder = { Text("آیدی تایپیست/ادیتور معتبر جدید (فعلی: ${wk.editorId})") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true
+                                )
+
+                                if (adjustmentError.isNotBlank()) {
+                                    Text(adjustmentError, color = Color.Red, fontSize = 9.sp, modifier = Modifier.padding(top = 4.dp))
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            val trans = adjustTransId.toIntOrNull() ?: wk.translatorId
+                                            val clean = adjustCleanId.toIntOrNull() ?: wk.cleanerId
+                                            val edit = adjustEditId.toIntOrNull() ?: wk.editorId
+
+                                            viewModel.adjustChapterRevenueAllocation(
+                                                mangaId = wk.mangaId,
+                                                chapterNumber = wk.chapterNumber,
+                                                correctTranslatorId = trans,
+                                                correctCleanerId = clean,
+                                                correctEditorId = edit,
+                                                onSuccess = {
+                                                    selectedWorkForAdj = null
+                                                    adjustTransId = ""
+                                                    adjustCleanId = ""
+                                                    adjustEditId = ""
+                                                    adjustmentError = ""
+                                                    Toast.makeText(context, "سهم همکاران اصلاح و مبالغ تراکنش عودت داده شد.", Toast.LENGTH_LONG).show()
+                                                },
+                                                onError = {
+                                                    adjustmentError = it
+                                                }
+                                            )
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100)),
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("تایید و تراز معکوس وجه", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+
+                                    Button(
+                                        onClick = { selectedWorkForAdj = null; adjustmentError = "" },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
+                                        modifier = Modifier.weight(0.7f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("انصراف", color = Color.White, fontSize = 10.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = Color(0xFF272C35))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text("داشبورد تحلیلی مجموع درآمدها و کسری‌ها:", color = Color.LightGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val totalRevenue = chapterWorks.sumOf { it.revenueEarned }
+                    val totalPlatformEarned = chapterWorks.sumOf { it.platformEarned }
+                    val totalPaidToStaff = totalRevenue - totalPlatformEarned
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E14)),
+                        border = BorderStroke(1.dp, Color(0xFF4CAF50))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.End) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("${totalRevenue} تومان", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text("۱. مجموع فروش کل چپترها", color = Color(0xFF4CAF50), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("${totalPlatformEarned} تومان", color = Color(0xFF00C6FF), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text("۲. سود خالص پلتفرم (سیستم)", color = Color.LightGray, fontSize = 10.sp)
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("${totalPaidToStaff} تومان", color = Color(0xFFFFD700), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text("۳. مجموع حقوق پخش‌شده همکاران", color = Color.LightGray, fontSize = 10.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = Color(0xFF272C35))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text("جدول ثبت درآمدهای تفکیکی فصول و مانهواها:", color = Color.LightGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (chapterWorks.isEmpty()) {
+                        Text("تراکنش مشارکتی ضبط شده‌ای یافت نشد.", color = Color.Gray, fontSize = 10.sp, modifier = Modifier.padding(vertical = 12.dp))
+                    } else {
+                        chapterWorks.forEach { work ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2126)),
+                                border = BorderStroke(1.dp, Color(0xFF2D3139))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.End) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            color = Color(0xFFFFD700).copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(
+                                                text = "کل درآمد: ${work.revenueEarned} تومان",
+                                                color = Color(0xFFFFD700),
+                                                fontSize = 9.sp,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+
+                                        Text(
+                                            text = "آیدی اثر #${work.mangaId} - فصل ${work.chapterNumber}",
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("کلینر: ${work.cleanerPaid} ت", color = Color.LightGray, fontSize = 9.sp)
+                                        Text("ادیتور: ${work.editorPaid} ت", color = Color.LightGray, fontSize = 9.sp)
+                                        Text("مترجم: ${work.translatorPaid} ت", color = Color.LightGray, fontSize = 9.sp)
+                                        Text("سیستم: ${work.platformEarned} ت", color = Color(0xFF00C6FF), fontSize = 9.sp)
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    HorizontalDivider(color = Color(0xFF272C35))
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Button(
+                                            onClick = {
+                                                selectedWorkForAdj = work
+                                                adjustTransId = ""
+                                                adjustCleanId = ""
+                                                adjustEditId = ""
+                                                adjustmentError = ""
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB71C1C)),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                            shape = RoundedCornerShape(6.dp),
+                                            modifier = Modifier.height(26.dp)
+                                        ) {
+                                            Text("اصلاح و جابجایی سهم اشتباه ⇄", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                        }
+
+                                        Text(
+                                            text = "شناسه کادر تولید: مترجم ${work.translatorId} / کلینر ${work.cleanerId} / ادیت ${work.editorId}",
+                                            color = Color.Gray,
+                                            fontSize = 8.sp
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -418,6 +830,7 @@ fun AdminUserCollaboration(viewModel: MovieViewModel, accounts: List<UserAccount
         }
     }
 }
+
 
 @Composable
 fun AdminRecruitmentsList(viewModel: MovieViewModel, recruitments: List<RecruitmentApplication>) {
@@ -534,7 +947,7 @@ fun AdminVersionControl(viewModel: MovieViewModel) {
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.End
         ) {
-            Text("شبیه‌ساز و تست آپدیت اجباری", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
+            Text("سیستم تایید اعتبار نسخه و آپدیت اجباری برخط", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(

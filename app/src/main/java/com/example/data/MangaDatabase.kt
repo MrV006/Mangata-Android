@@ -16,9 +16,11 @@ import androidx.room.RoomDatabase
         SystemSettingsEntity::class,
         RecruitmentApplication::class,
         StoryEntity::class,
-        ChapterPurchaseRecord::class
+        ChapterPurchaseRecord::class,
+        SupportTicket::class,
+        ChapterWork::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 abstract class MangaDatabase : RoomDatabase() {

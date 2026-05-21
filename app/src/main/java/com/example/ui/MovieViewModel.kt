@@ -29,6 +29,60 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     private val _isDomainConnected = MutableStateFlow(true)
     val isDomainConnected: StateFlow<Boolean> = _isDomainConnected.asStateFlow()
 
+    private val _downloadedChapters = MutableStateFlow<Map<Int, List<Int>>>(emptyMap())
+    val downloadedChapters: StateFlow<Map<Int, List<Int>>> = _downloadedChapters.asStateFlow()
+
+    private val _downloadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
+    val downloadProgress: StateFlow<Map<String, Float>> = _downloadProgress.asStateFlow()
+
+    fun updateDownloadedChapters(context: android.content.Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = com.example.engine.CipherEngine.getDownloadedChaptersList(context)
+            _downloadedChapters.value = list
+        }
+    }
+
+    fun downloadChapterOffline(context: android.content.Context, mangaId: Int, chapterNumber: Int, pagesJson: String) {
+        val key = "${mangaId}_${chapterNumber}"
+        if (_downloadProgress.value.containsKey(key)) return // already downloading
+        
+        val pageUrls = mutableListOf<String>()
+        try {
+            val jsonArray = org.json.JSONArray(pagesJson)
+            for (i in 0 until jsonArray.length()) {
+                pageUrls.add(jsonArray.getString(i))
+            }
+        } catch (e: Exception) {
+            // Default fallbacks in case of paring failure
+            pageUrls.addAll(listOf("https://picsum.photos/id/1015/800/1200", "https://picsum.photos/id/1016/800/1200"))
+        }
+
+        viewModelScope.launch {
+            val progressMap = _downloadProgress.value.toMutableMap()
+            progressMap[key] = 0f
+            _downloadProgress.value = progressMap
+
+            com.example.engine.CipherEngine.downloadAndEncryptChapter(
+                context, mangaId, chapterNumber, pageUrls,
+                onProgress = { current, total ->
+                    val cp = _downloadProgress.value.toMutableMap()
+                    cp[key] = current.toFloat() / total.toFloat()
+                    _downloadProgress.value = cp
+                }
+            )
+
+            // Remove from progress after complete
+            val finalMap = _downloadProgress.value.toMutableMap()
+            finalMap.remove(key)
+            _downloadProgress.value = finalMap
+
+            updateDownloadedChapters(context)
+            withContext(Dispatchers.Main) {
+                android.widget.Toast.makeText(context, "دانلود و رمزنگاری فصل $chapterNumber با موفقیت انجام شد.", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     // UI state streams
     val mangas: StateFlow<List<MangaEntity>> = repository.allMangas
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -65,6 +119,16 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
 
     val stories: StateFlow<List<StoryEntity>> = repository.allStories
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allSupportTickets: StateFlow<List<SupportTicket>> = repository.allSupportTickets
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allChapterWorks: StateFlow<List<ChapterWork>> = repository.allChapterWorks
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val userSupportTickets: StateFlow<List<SupportTicket>> = combine(repository.allSupportTickets, _currentUserId) { tickets, userId ->
+        tickets.filter { it.userId == userId }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _serverVersionCode = MutableStateFlow(2) // Defaults to app version code 2
     val serverVersionCode: StateFlow<Int> = _serverVersionCode.asStateFlow()
@@ -209,11 +273,26 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     fun updateSiteDomain(domain: String) {
         _siteDomain.value = domain
         sharedPrefs.edit().putString("domain_url", domain).apply()
-        // Simulate dynamic testing of domain REST API structure
+        
         viewModelScope.launch {
             _isDomainConnected.value = false
-            kotlinx.coroutines.delay(1200) // Realistic server ping check
-            _isDomainConnected.value = true
+            try {
+                // Testing connection via Retrofit Client to WP REST API
+                val api = com.example.network.RetrofitClient.getClient(domain)
+                
+                // Fetch dynamic Manga Entities from Website
+                val wpMangas = api.getMangas()
+                Log.d(LOG_TAG, "Fetched ${wpMangas.size} mangas from WordPress API")
+                
+                if (wpMangas.isNotEmpty()) {
+                    repository.insertAllMangas(wpMangas)
+                }
+
+                _isDomainConnected.value = true
+            } catch(e: Exception) {
+                Log.e(LOG_TAG, "WordPress REST API connection failed: ${e.message}")
+                _isDomainConnected.value = false // Keep false if connection failed
+            }
         }
     }
 
@@ -346,6 +425,206 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         _currentUserId.value = userId
     }
 
+    fun loginUser(usernameInput: String, passwordInput: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val accounts = repository.allUserAccounts.first()
+            val matched = accounts.find { it.username.trim().equals(usernameInput.trim(), ignoreCase = true) }
+            if (matched == null) {
+                withContext(Dispatchers.Main) { onError("کاربری با این نام کاربری یافت نشد.") }
+            } else if (matched.password != passwordInput) {
+                withContext(Dispatchers.Main) { onError("رمز عبور وارد شده اشتباه است.") }
+            } else {
+                _currentUserId.value = matched.id
+                withContext(Dispatchers.Main) { onSuccess() }
+            }
+        }
+    }
+
+    fun registerNewUser(
+        username: String,
+        displayName: String,
+        passwordInput: String,
+        role: String = "NORMAL_USER",
+        subRole: String = "کاربر عادی",
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val accounts = repository.allUserAccounts.first()
+            if (accounts.any { it.username.trim().equals(username.trim(), ignoreCase = true) }) {
+                withContext(Dispatchers.Main) { onError("این نام کاربری قبلاً ثبت شده است.") }
+                return@launch
+            }
+            val user = UserAccount(
+                username = username.trim(),
+                displayName = displayName.trim(),
+                role = role,
+                subRole = subRole,
+                walletRial = 0,
+                walletGiftChapters = 0,
+                storyTokens = 0,
+                password = passwordInput
+            )
+            repository.insertUserAccount(user)
+            val updatedAccounts = repository.allUserAccounts.first()
+            val registeredUser = updatedAccounts.find { it.username == username.trim() }
+            if (registeredUser != null) {
+                _currentUserId.value = registeredUser.id
+                withContext(Dispatchers.Main) { onSuccess() }
+            }
+        }
+    }
+
+    fun addChapterUploadAndWork(
+        mangaId: Int,
+        chapterNumber: Int,
+        translatorId: Int,
+        cleanerId: Int,
+        editorId: Int,
+        uploadFileUri: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val accounts = repository.allUserAccounts.first()
+            val trans = accounts.find { it.id == translatorId }
+            val clean = accounts.find { it.id == cleanerId }
+            val edit = accounts.find { it.id == editorId }
+            
+            if (trans == null || clean == null || edit == null) {
+                withContext(Dispatchers.Main) { onError("لطفا همکاران معتبر انتخاب کنید.") }
+                return@launch
+            }
+            
+            val mangasObj = repository.allMangas.first()
+            val targetManga = mangasObj.find { it.id == mangaId }
+            if (targetManga == null) {
+                withContext(Dispatchers.Main) { onError("مانهوا یافت نشد.") }
+                return@launch
+            }
+            
+            val work = ChapterWork(
+                mangaId = mangaId,
+                mangaTitle = targetManga.titleFa,
+                chapterNumber = chapterNumber,
+                translatorId = translatorId,
+                translatorName = trans.displayName,
+                cleanerId = cleanerId,
+                cleanerName = clean.displayName,
+                editorId = editorId,
+                editorName = edit.displayName,
+                revenueEarned = 0L,
+                cleanerPaid = 0L,
+                editorPaid = 0L,
+                translatorPaid = 0L,
+                platformEarned = 0L
+            )
+            repository.insertChapterWork(work)
+            
+            val updatedManga = targetManga.copy(
+                chaptersCount = maxOf(targetManga.chaptersCount, chapterNumber)
+            )
+            repository.updateManga(updatedManga)
+            
+            val rewardRate = systemSettings.value.defaultStaffRewardChapters
+            repository.insertUserAccount(trans.copy(
+                walletGiftChapters = trans.walletGiftChapters + rewardRate,
+                chaptersContributedThisMonth = trans.chaptersContributedThisMonth + 1
+            ))
+            if (clean.id != trans.id) {
+                repository.insertUserAccount(clean.copy(
+                    walletGiftChapters = clean.walletGiftChapters + rewardRate,
+                    chaptersContributedThisMonth = clean.chaptersContributedThisMonth + 1
+                ))
+            }
+            if (edit.id != trans.id && edit.id != clean.id) {
+                repository.insertUserAccount(edit.copy(
+                    walletGiftChapters = edit.walletGiftChapters + rewardRate,
+                    chaptersContributedThisMonth = edit.chaptersContributedThisMonth + 1
+                ))
+            }
+            
+            withContext(Dispatchers.Main) { onSuccess() }
+        }
+    }
+
+    fun adjustChapterRevenueAllocation(
+        mangaId: Int,
+        chapterNumber: Int,
+        correctTranslatorId: Int,
+        correctCleanerId: Int,
+        correctEditorId: Int,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val work = repository.getChapterWorkByMangaAndNumberOneShot(mangaId, chapterNumber)
+            if (work == null) {
+                withContext(Dispatchers.Main) { onError("رکوردی برای مانهوا ${mangaId} فصل ${chapterNumber} یافت نشد.") }
+                return@launch
+            }
+
+            val accounts = repository.allUserAccounts.first()
+            
+            val prevTransId = work.translatorId
+            val prevCleanId = work.cleanerId
+            val prevEditId = work.editorId
+            
+            val transShare = work.translatorPaid
+            val cleanShare = work.cleanerPaid
+            val editShare = work.editorPaid
+
+            val balanceUpdates = mutableMapOf<Int, Long>()
+            
+            balanceUpdates[prevTransId] = (balanceUpdates[prevTransId] ?: 0L) - transShare
+            balanceUpdates[prevCleanId] = (balanceUpdates[prevCleanId] ?: 0L) - cleanShare
+            balanceUpdates[prevEditId] = (balanceUpdates[prevEditId] ?: 0L) - editShare
+            
+            balanceUpdates[correctTranslatorId] = (balanceUpdates[correctTranslatorId] ?: 0L) + transShare
+            balanceUpdates[correctCleanerId] = (balanceUpdates[correctCleanerId] ?: 0L) + cleanShare
+            balanceUpdates[correctEditorId] = (balanceUpdates[correctEditorId] ?: 0L) + editShare
+            
+            accounts.forEach { account ->
+                val change = balanceUpdates[account.id]
+                if (change != null && change != 0L) {
+                    val updatedWallet = (account.walletRial + change).coerceAtLeast(0L)
+                    repository.insertUserAccount(account.copy(walletRial = updatedWallet))
+                }
+            }
+            
+            val correctTransName = accounts.find { it.id == correctTranslatorId }?.displayName ?: "مترجم"
+            val correctCleanName = accounts.find { it.id == correctCleanerId }?.displayName ?: "کلینر"
+            val correctEditName = accounts.find { it.id == correctEditorId }?.displayName ?: "ادیتور"
+            
+            val updatedWork = work.copy(
+                translatorId = correctTranslatorId,
+                translatorName = correctTransName,
+                cleanerId = correctCleanerId,
+                cleanerName = correctCleanName,
+                editorId = correctEditorId,
+                editorName = correctEditName
+            )
+            repository.insertChapterWork(updatedWork)
+            
+            withContext(Dispatchers.Main) { onSuccess() }
+        }
+    }
+
+    fun promoteToSuperAdmin(userId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val accounts = repository.allUserAccounts.first()
+            val user = accounts.find { it.id == userId } ?: return@launch
+            val updatedUser = user.copy(role = "SUPER_ADMIN", subRole = "مدیر کل")
+            repository.insertUserAccount(updatedUser)
+        }
+    }
+
+    fun updateUserAccount(user: UserAccount) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.insertUserAccount(user)
+        }
+    }
+
     fun updateSystemSettings(settings: SystemSettingsEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.insertSystemSettings(settings)
@@ -399,20 +678,32 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
                     val translatorShare = (cost * settings.shareTranslatorPct / 100).toLong()
                     val platformShare = (cost * settings.sharePlatformPct / 100).toLong()
 
+                    val chapterWork = repository.getChapterWorkByMangaAndNumberOneShot(mangaId, chapterNumber)
+                    val transId = chapterWork?.translatorId ?: 5
+                    val cleanId = chapterWork?.cleanerId ?: 3
+                    val editId = chapterWork?.editorId ?: 4
+                    val platId = 1
+
                     userAccounts.value.forEach { account ->
                         var modifiedUser = account
                         var updated = false
-                        if (account.id == 3) {
+                        if (account.id == cleanId) {
                             modifiedUser = account.copy(walletRial = account.walletRial + cleanerShare)
                             updated = true
-                        } else if (account.id == 4) {
-                            modifiedUser = account.copy(walletRial = account.walletRial + editorShare)
+                        }
+                        if (account.id == editId) {
+                            val cur = if (updated) modifiedUser.walletRial else account.walletRial
+                            modifiedUser = modifiedUser.copy(walletRial = cur + editorShare)
                             updated = true
-                        } else if (account.id == 5) {
-                            modifiedUser = account.copy(walletRial = account.walletRial + translatorShare)
+                        }
+                        if (account.id == transId) {
+                            val cur = if (updated) modifiedUser.walletRial else account.walletRial
+                            modifiedUser = modifiedUser.copy(walletRial = cur + translatorShare)
                             updated = true
-                        } else if (account.id == 1) {
-                            modifiedUser = account.copy(walletRial = account.walletRial + platformShare)
+                        }
+                        if (account.id == platId) {
+                            val cur = if (updated) modifiedUser.walletRial else account.walletRial
+                            modifiedUser = modifiedUser.copy(walletRial = cur + platformShare)
                             updated = true
                         }
 
@@ -420,6 +711,33 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
                             repository.insertUserAccount(modifiedUser)
                         }
                     }
+
+                    val mangaEntityObj = repository.allMangas.first().find { it.id == mangaId }
+                    val mangaTitleString = mangaEntityObj?.titleFa ?: "مانهوا"
+
+                    val updatedWork = chapterWork?.copy(
+                        revenueEarned = chapterWork.revenueEarned + cost,
+                        cleanerPaid = chapterWork.cleanerPaid + cleanerShare,
+                        editorPaid = chapterWork.editorPaid + editorShare,
+                        translatorPaid = chapterWork.translatorPaid + translatorShare,
+                        platformEarned = chapterWork.platformEarned + platformShare
+                    ) ?: com.example.data.ChapterWork(
+                        mangaId = mangaId,
+                        mangaTitle = mangaTitleString,
+                        chapterNumber = chapterNumber,
+                        translatorId = transId,
+                        translatorName = userAccounts.value.find { it.id == transId }?.displayName ?: "مترجم",
+                        cleanerId = cleanId,
+                        cleanerName = userAccounts.value.find { it.id == cleanId }?.displayName ?: "کلینر",
+                        editorId = editId,
+                        editorName = userAccounts.value.find { it.id == editId }?.displayName ?: "ادیتور",
+                        revenueEarned = cost.toLong(),
+                        cleanerPaid = cleanerShare,
+                        editorPaid = editorShare,
+                        translatorPaid = translatorShare,
+                        platformEarned = platformShare
+                    )
+                    repository.insertChapterWork(updatedWork)
 
                     repository.insertChapterPurchase(
                         ChapterPurchaseRecord(
@@ -452,41 +770,81 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     fun purchaseBulkChapters(mangaId: Int, startChapter: Int, count: Int, onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}) {
         val user = currentUserAccount.value ?: return
         val discountedCost = getBulkChaptersPrice(count)
+        val settings = systemSettings.value
 
         viewModelScope.launch(Dispatchers.IO) {
             if (user.walletRial >= discountedCost) {
                 val updatedUser = user.copy(walletRial = user.walletRial - discountedCost)
                 repository.insertUserAccount(updatedUser)
 
-                val settings = systemSettings.value
-                val cleanerShare = (discountedCost * settings.shareCleanerPct / 100).toLong()
-                val editorShare = (discountedCost * settings.shareEditorPct / 100).toLong()
-                val translatorShare = (discountedCost * settings.shareTranslatorPct / 100).toLong()
-                val platformShare = (discountedCost * settings.sharePlatformPct / 100).toLong()
-
-                userAccounts.value.forEach { account ->
-                    var modifiedUser = account
-                    var updated = false
-                    if (account.id == 3) {
-                        modifiedUser = account.copy(walletRial = account.walletRial + cleanerShare)
-                        updated = true
-                    } else if (account.id == 4) {
-                        modifiedUser = account.copy(walletRial = account.walletRial + editorShare)
-                        updated = true
-                    } else if (account.id == 5) {
-                        modifiedUser = account.copy(walletRial = account.walletRial + translatorShare)
-                        updated = true
-                    } else if (account.id == 1) {
-                        modifiedUser = account.copy(walletRial = account.walletRial + platformShare)
-                        updated = true
-                    }
-
-                    if (updated) {
-                        repository.insertUserAccount(modifiedUser)
-                    }
-                }
+                val costPerChapter = discountedCost / count
+                val cleanerShare = (costPerChapter * settings.shareCleanerPct / 100).toLong()
+                val editorShare = (costPerChapter * settings.shareEditorPct / 100).toLong()
+                val translatorShare = (costPerChapter * settings.shareTranslatorPct / 100).toLong()
+                val platformShare = (costPerChapter * settings.sharePlatformPct / 100).toLong()
 
                 for (ch in startChapter until (startChapter + count)) {
+                    val chapterWork = repository.getChapterWorkByMangaAndNumberOneShot(mangaId, ch)
+                    val transId = chapterWork?.translatorId ?: 5
+                    val cleanId = chapterWork?.cleanerId ?: 3
+                    val editId = chapterWork?.editorId ?: 4
+                    val platId = 1
+
+                    userAccounts.value.forEach { account ->
+                        var modifiedUser = account
+                        var updated = false
+                        if (account.id == cleanId) {
+                            modifiedUser = account.copy(walletRial = account.walletRial + cleanerShare)
+                            updated = true
+                        }
+                        if (account.id == editId) {
+                            val cur = if (updated) modifiedUser.walletRial else account.walletRial
+                            modifiedUser = modifiedUser.copy(walletRial = cur + editorShare)
+                            updated = true
+                        }
+                        if (account.id == transId) {
+                            val cur = if (updated) modifiedUser.walletRial else account.walletRial
+                            modifiedUser = modifiedUser.copy(walletRial = cur + translatorShare)
+                            updated = true
+                        }
+                        if (account.id == platId) {
+                            val cur = if (updated) modifiedUser.walletRial else account.walletRial
+                            modifiedUser = modifiedUser.copy(walletRial = cur + platformShare)
+                            updated = true
+                        }
+
+                        if (updated) {
+                            repository.insertUserAccount(modifiedUser)
+                        }
+                    }
+
+                    val mangaEntityObj = repository.allMangas.first().find { it.id == mangaId }
+                    val mangaTitleString = mangaEntityObj?.titleFa ?: "مانهوا"
+
+                    val updatedWork = chapterWork?.copy(
+                        revenueEarned = chapterWork.revenueEarned + costPerChapter,
+                        cleanerPaid = chapterWork.cleanerPaid + cleanerShare,
+                        editorPaid = chapterWork.editorPaid + editorShare,
+                        translatorPaid = chapterWork.translatorPaid + translatorShare,
+                        platformEarned = chapterWork.platformEarned + platformShare
+                    ) ?: com.example.data.ChapterWork(
+                        mangaId = mangaId,
+                        mangaTitle = mangaTitleString,
+                        chapterNumber = ch,
+                        translatorId = transId,
+                        translatorName = userAccounts.value.find { it.id == transId }?.displayName ?: "مترجم",
+                        cleanerId = cleanId,
+                        cleanerName = userAccounts.value.find { it.id == cleanId }?.displayName ?: "کلینر",
+                        editorId = editId,
+                        editorName = userAccounts.value.find { it.id == editId }?.displayName ?: "ادیتور",
+                        revenueEarned = costPerChapter.toLong(),
+                        cleanerPaid = cleanerShare,
+                        editorPaid = editorShare,
+                        translatorPaid = translatorShare,
+                        platformEarned = platformShare
+                    )
+                    repository.insertChapterWork(updatedWork)
+
                     repository.insertChapterPurchase(
                         ChapterPurchaseRecord(
                             userId = user.id,
@@ -719,6 +1077,36 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
                 _aiSummaryState.value = AiSummaryState.Success(summary)
             } catch (e: Exception) {
                 _aiSummaryState.value = AiSummaryState.Error("خطایی در اتصال با جمینای رخ داد.")
+            }
+        }
+    }
+
+    fun createSupportTicket(title: String, description: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val user = currentUserAccount.value ?: return@launch
+            val ticket = SupportTicket(
+                userId = user.id,
+                senderUsername = if (user.displayName.isNotEmpty()) user.displayName else user.username,
+                title = title,
+                description = description,
+                isAnswered = false
+            )
+            repository.insertSupportTicket(ticket)
+        }
+    }
+
+    fun answerSupportTicket(ticketId: Int, replyMessage: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val user = currentUserAccount.value ?: return@launch
+            if (user.role == "SUPER_ADMIN" || user.role == "DEPT_ADMIN") {
+                val tickets = repository.allSupportTickets.first()
+                val ticket = tickets.find { it.id == ticketId } ?: return@launch
+                val updatedTicket = ticket.copy(
+                    replyMessage = replyMessage,
+                    replierName = user.displayName.ifEmpty { user.username },
+                    isAnswered = true
+                )
+                repository.insertSupportTicket(updatedTicket)
             }
         }
     }
