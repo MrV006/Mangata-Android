@@ -11,6 +11,9 @@ interface MangaDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMangas(mangas: List<MangaEntity>)
 
+    @Query("DELETE FROM mangas WHERE id = :id")
+    suspend fun deleteMangaById(id: Int)
+
     @Query("SELECT * FROM mangas WHERE id = :id")
     fun getMangaById(id: Int): Flow<MangaEntity?>
 

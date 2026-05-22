@@ -13,6 +13,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -365,6 +367,9 @@ fun LibraryDashboard(viewModel: MovieViewModel) {
                 }
             }
         }
+
+        // Live Super Admin master quick control panel
+        SuperAdminQuickAccessBox(viewModel = viewModel)
 
         // Smart Recruitment Portal Entrance for New Staff Translators / Cleaners
         RecruitmentPortalCard(viewModel = viewModel)
@@ -1539,6 +1544,14 @@ fun MangaDetailOverlay(
                 }
             }
 
+            if (currentUser?.role == "SUPER_ADMIN") {
+                SuperAdminLiveMangaEditor(
+                    manga = manga,
+                    viewModel = viewModel,
+                    onDeleted = { onClose() }
+                )
+            }
+
             Spacer(modifier = Modifier.height(14.dp))
 
             // Last Reading History position tracker
@@ -2268,3 +2281,700 @@ fun MangaAuthScreen(viewModel: MovieViewModel) {
         }
     }
 }
+
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun SuperAdminQuickAccessBox(viewModel: com.example.ui.MovieViewModel) {
+    val currentUser by viewModel.currentUserAccount.collectAsState()
+    val accounts by viewModel.userAccounts.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    if (currentUser?.role != "SUPER_ADMIN") return
+
+    var mainExpanded by remember { mutableStateOf(false) }
+    var selectedSection by remember { mutableStateOf("افزودن مانهوا") } // "افزودن مانهوا", "موجودی و حساب‌ها", "آزمون‌ها", "ارسال استوری"
+
+    // Add Manga state variables
+    var titleFa by remember { mutableStateOf("") }
+    var titleEn by remember { mutableStateOf("") }
+    var descriptionFa by remember { mutableStateOf("") }
+    var coverUrl by remember { mutableStateOf("") }
+    var bannerUrl by remember { mutableStateOf("") }
+    var genres by remember { mutableStateOf("عاشقانه, اکشن, معمایی") }
+    var authorName by remember { mutableStateOf("آقای فلانی") }
+    var countChapters by remember { mutableStateOf("10") }
+    var selectedType by remember { mutableStateOf("مانهوا") }
+
+    // Wallet adjustment state variables
+    var selectedUserIndex by remember { mutableStateOf(0) }
+    var showUserDropdown by remember { mutableStateOf(false) }
+    var creditAmount by remember { mutableStateOf("") }
+    var creditGiftChapters by remember { mutableStateOf("") }
+
+    // Stories state variables
+    var storyMediaUrl by remember { mutableStateOf("") }
+    var storyCaption by remember { mutableStateOf("") }
+
+    Card(
+        modifier = androidx.compose.ui.Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF141A14)), // Dark emerald
+        border = BorderStroke(1.2.dp, Color(0xFF4CAF50)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = androidx.compose.ui.Modifier.padding(14.dp),
+            horizontalAlignment = Alignment.End
+        ) {
+            Row(
+                modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { mainExpanded = !mainExpanded }
+                ) {
+                    Icon(
+                        imageVector = if (mainExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = "باز کردن منو",
+                        tint = Color(0xFF4CAF50)
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "داشبورد فوق‌سریع فرماندهی ادمین کل (کبریا)",
+                            color = Color(0xFF81C784),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "مدیریت آنلاین مانهواها، کیف‌پول‌های وب‌سایت، استوری‌گیر اینستا و استخدام‌ها",
+                            color = Color.Gray,
+                            fontSize = 8.5.sp
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50),
+                        modifier = androidx.compose.ui.Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            if (mainExpanded) {
+                Spacer(modifier = androidx.compose.ui.Modifier.height(12.dp))
+                HorizontalDivider(color = Color(0xFF2E3D2E))
+                Spacer(modifier = androidx.compose.ui.Modifier.height(8.dp))
+
+                // Navigation Tabs inside Quick panel
+                FlowRow(
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)
+                ) {
+                    listOf("افزودن مانهوا", "موجودی و حساب‌ها", "آزمون‌ها", "ارسال استوری").forEach { sec ->
+                        val isSel = selectedSection == sec
+                        Box(
+                            modifier = androidx.compose.ui.Modifier
+                                .background(if (isSel) Color(0xFF2E7D32) else Color(0xFF1B221B), RoundedCornerShape(8.dp))
+                                .clickable { selectedSection = sec }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(sec, color = if (isSel) Color.White else Color.LightGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = androidx.compose.ui.Modifier.height(14.dp))
+
+                when (selectedSection) {
+                    "افزودن مانهوا" -> {
+                        Text("درج مانهوای جدید در پایگاه داده کل کاربران:", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = androidx.compose.ui.Modifier.height(6.dp))
+
+                        OutlinedTextField(
+                            value = titleFa,
+                            onValueChange = { titleFa = it },
+                            placeholder = { Text("مثال: پادشاه هکرهای فضایی") },
+                            label = { Text("عنوان فارسی مانهوا") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = titleEn,
+                            onValueChange = { titleEn = it },
+                            placeholder = { Text("مثال: Cyber King of Cosmos") },
+                            label = { Text("عنوان آلترناتیو / انگلیسی") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = descriptionFa,
+                            onValueChange = { descriptionFa = it },
+                            label = { Text("خلاصه داستان مانهوا") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth().height(80.dp).padding(vertical = 2.dp)
+                        )
+
+                        Row(
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = coverUrl,
+                                onValueChange = { coverUrl = it },
+                                placeholder = { Text("https://...") },
+                                label = { Text("آدرس کاور") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                                modifier = androidx.compose.ui.Modifier.weight(1f).padding(vertical = 2.dp)
+                            )
+                            OutlinedTextField(
+                                value = bannerUrl,
+                                onValueChange = { bannerUrl = it },
+                                placeholder = { Text("https://...") },
+                                label = { Text("آدرس بنر") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                                modifier = androidx.compose.ui.Modifier.weight(1f).padding(vertical = 2.dp)
+                            )
+                        }
+
+                        Row(
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = genres,
+                                onValueChange = { genres = it },
+                                label = { Text("ژانرها (با کاما)") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                                modifier = androidx.compose.ui.Modifier.weight(1f).padding(vertical = 2.dp)
+                            )
+
+                            OutlinedTextField(
+                                value = countChapters,
+                                onValueChange = { countChapters = it },
+                                label = { Text("تعداد چپتر") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                                modifier = androidx.compose.ui.Modifier.weight(0.5f).padding(vertical = 2.dp)
+                            )
+
+                            // Type chips
+                            Column(modifier = androidx.compose.ui.Modifier.weight(0.6f)) {
+                                Text("نوع اثر:", color = Color.Gray, fontSize = 9.sp)
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    listOf("مانهوا", "مانگا").forEach { st ->
+                                        Box(
+                                            modifier = androidx.compose.ui.Modifier
+                                                .background(if (selectedType == st) Color(0xFF4CAF50) else Color.DarkGray, RoundedCornerShape(4.dp))
+                                                .clickable { selectedType = st }
+                                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(st, color = Color.White, fontSize = 9.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = androidx.compose.ui.Modifier.height(10.dp))
+
+                        Button(
+                            onClick = {
+                                if (titleFa.isEmpty() || titleEn.isEmpty()) {
+                                    Toast.makeText(context, "لطفا عنوان فارسی و انگلیسی را پر کنید", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                val readyCover = if (coverUrl.isEmpty()) "https://images.unsplash.com/photo-1578632767115-351597cf2477" else coverUrl
+                                val readyBanner = if (bannerUrl.isEmpty()) "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f" else bannerUrl
+
+                                viewModel.addNewManga(
+                                    titleFa = titleFa.trim(),
+                                    titleEn = titleEn.trim(),
+                                    descriptionFa = descriptionFa.trim().ifEmpty { "توضیحاتی برای این اثر نوشته نشده است." },
+                                    coverUrl = readyCover.trim(),
+                                    bannerUrl = readyBanner.trim(),
+                                    author = authorName,
+                                    genres = genres.trim(),
+                                    chaptersCount = countChapters.toIntOrNull() ?: 10,
+                                    type = selectedType
+                                )
+
+                                Toast.makeText(context, "مانهوا فوق‌العاده ${titleFa} با موفقیت در سراسر دیتابیس ثبت شد!", Toast.LENGTH_LONG).show()
+                                // Clear inputs
+                                titleFa = ""
+                                titleEn = ""
+                                descriptionFa = ""
+                                coverUrl = ""
+                                bannerUrl = ""
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("درج آنی و انتشار مانهوا در سایت و اپ", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    "موجودی و حساب‌ها" -> {
+                        Text("مدیریت تسویه و ویرایش آنلاین موجودی‌های کل کاربران و خود شما:", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = androidx.compose.ui.Modifier.height(8.dp))
+
+                        val accountsList = accounts
+                        val selectedUser = accountsList.getOrNull(selectedUserIndex)
+
+                        if (selectedUser != null) {
+                            // User Select Box dropdown
+                            Box(
+                                modifier = androidx.compose.ui.Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFF1B221B), RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color(0xFF4CAF50), RoundedCornerShape(8.dp))
+                                    .clickable { showUserDropdown = true }
+                                    .padding(12.dp),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.LightGray)
+                                    Text(
+                                        text = "${selectedUser.displayName} (${selectedUser.subRole}) - موجودی: ${selectedUser.walletRial} تومان / ${selectedUser.walletGiftChapters} کوپن",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                DropdownMenu(
+                                    expanded = showUserDropdown,
+                                    onDismissRequest = { showUserDropdown = false },
+                                    modifier = androidx.compose.ui.Modifier.background(Color(0xFF1B221B))
+                                ) {
+                                    accountsList.forEachIndexed { idx, acc ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = "${acc.displayName} (${acc.subRole}) - ${acc.walletRial} تومان / ${acc.walletGiftChapters} کوپن هدیه‌",
+                                                    color = Color.White,
+                                                    textAlign = TextAlign.Right,
+                                                    modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+                                                )
+                                            },
+                                            onClick = {
+                                                selectedUserIndex = idx
+                                                showUserDropdown = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = androidx.compose.ui.Modifier.height(10.dp))
+
+                            Row(
+                                modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = creditAmount,
+                                    onValueChange = { creditAmount = it },
+                                    label = { Text("مقدار افزایش اعتبار نقدی (تومان)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                                    modifier = androidx.compose.ui.Modifier.weight(1.1f)
+                                )
+
+                                OutlinedTextField(
+                                    value = creditGiftChapters,
+                                    onValueChange = { creditGiftChapters = it },
+                                    label = { Text("افزایش کوپن هدیه") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                                    modifier = androidx.compose.ui.Modifier.weight(0.9f)
+                                )
+                            }
+
+                            Spacer(modifier = androidx.compose.ui.Modifier.height(8.dp))
+
+                            Row(
+                                modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        val curRial = selectedUser.walletRial
+                                        val addRial = creditAmount.toLongOrNull() ?: 0L
+                                        val curGift = selectedUser.walletGiftChapters
+                                        val addGift = creditGiftChapters.toIntOrNull() ?: 0
+
+                                        val updated = selectedUser.copy(
+                                            walletRial = curRial + addRial,
+                                            walletGiftChapters = curGift + addGift
+                                        )
+                                        viewModel.updateUserAccount(updated)
+                                        Toast.makeText(context, "حساب ${selectedUser.displayName} به روز رسانی شد. موجودی جدید: ${updated.walletRial} تومان / ${updated.walletGiftChapters} کوپن", Toast.LENGTH_LONG).show()
+                                        creditAmount = ""
+                                        creditGiftChapters = ""
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                    modifier = androidx.compose.ui.Modifier.weight(1.3f)
+                                ) {
+                                    Text("به‌روزرسانی و شارژ آنی حساب", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        val updated = selectedUser.copy(
+                                            walletRial = 0L,
+                                            walletGiftChapters = 0
+                                        )
+                                        viewModel.updateUserAccount(updated)
+                                        Toast.makeText(context, "موجودی ریالی و کوپنی کاربر نامبرده صفر شد.", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                                    modifier = androidx.compose.ui.Modifier.weight(0.7f)
+                                ) {
+                                    Text("صفر کردن کیف‌پول", color = Color.White, fontSize = 10.sp)
+                                }
+                            }
+                        } else {
+                            Text("کاربری در دیتابیس بومی یافت نشد.", color = Color.Gray, fontSize = 11.sp)
+                        }
+                    }
+
+                    "آزمون‌ها" -> {
+                        Text("تنظیم و بارگذاری آنلاین آزمون‌های استخدام مترجم، کلینیر یا تایپیست:", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = androidx.compose.ui.Modifier.height(10.dp))
+
+                        val tActive by viewModel.isTranslatorTestUploaded.collectAsState()
+                        val cActive by viewModel.isCleanerTestUploaded.collectAsState()
+                        val tyActive by viewModel.isTypistTestUploaded.collectAsState()
+
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1B221B)),
+                            border = BorderStroke(1.dp, Color(0xFF2E7D32).copy(alpha = 0.4f)),
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = androidx.compose.ui.Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Switch(checked = tActive, onCheckedChange = { viewModel.setTranslatorTestUploaded(it) })
+                                    Text("آزمون مترجمی تیم (کتابچه تست کلمات فعال)", color = Color.White, fontSize = 12.sp)
+                                }
+                                Spacer(modifier = androidx.compose.ui.Modifier.height(6.dp))
+                                Row(
+                                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Switch(checked = cActive, onCheckedChange = { viewModel.setCleanerTestUploaded(it) })
+                                    Text("آزمون کلینر مانهوا (فایل فشرده خام تمیزکاری)", color = Color.White, fontSize = 12.sp)
+                                }
+                                Spacer(modifier = androidx.compose.ui.Modifier.height(6.dp))
+                                Row(
+                                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Switch(checked = tyActive, onCheckedChange = { viewModel.setTypistTestUploaded(it) })
+                                    Text("آزمون تایپیست تیم (کادرگذاری و فونت مجاز)", color = Color.White, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                        Spacer(modifier = androidx.compose.ui.Modifier.height(10.dp))
+                        Button(
+                            onClick = {
+                                Toast.makeText(context, "تغییرات آزمون‌ها با موفقیت در سایت و دیتابیس اعمال گردید.", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+                        ) {
+                            Text("اعمال نهایی آیین‌نامه", color = Color.White, fontSize = 11.sp)
+                        }
+                    }
+
+                    "ارسال استوری" -> {
+                        Text("ثبت و درج یک استوری مانهوایی جذاب شبیه اینستاگرام برای هوم کلاینت‌ها:", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = androidx.compose.ui.Modifier.height(6.dp))
+
+                        OutlinedTextField(
+                            value = storyMediaUrl,
+                            onValueChange = { storyMediaUrl = it },
+                            placeholder = { Text("مثال: https://images.unsplash.com/photo-1541963463532-d68292c34b19") },
+                            label = { Text("آدرس تصویر یا ویدئو استوری") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = storyCaption,
+                            onValueChange = { storyCaption = it },
+                            placeholder = { Text("مثال: چپتر جدید مانهوا پادشاه هکرها با ترجمه اختصاصی امیررضا منتشر شد!") },
+                            label = { Text("کپشن / متن توصیحی استوری") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        )
+
+                        Spacer(modifier = androidx.compose.ui.Modifier.height(10.dp))
+
+                        Button(
+                            onClick = {
+                                if (storyMediaUrl.isEmpty()) {
+                                    Toast.makeText(context, "لطفا آدرس تصویر استوری را پر کنید", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                viewModel.postStory(storyMediaUrl.trim(), storyCaption.trim(), onSuccess = {
+                                    Toast.makeText(context, "استوری جدید شما با کبریا و موفقیت آپلود و منتشر گردید!", Toast.LENGTH_LONG).show()
+                                    storyMediaUrl = ""
+                                    storyCaption = ""
+                                }, onError = {
+                                    Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+                                })
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("درج و انتشار آنی استوری به سبک اینستاگرام", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SuperAdminLiveMangaEditor(
+    manga: com.example.data.MangaEntity,
+    viewModel: com.example.ui.MovieViewModel,
+    onDeleted: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var isEditing by remember { mutableStateOf(false) }
+
+    var titleFa by remember(manga) { mutableStateOf(manga.titleFa) }
+    var titleEn by remember(manga) { mutableStateOf(manga.titleEn) }
+    var descFa by remember(manga) { mutableStateOf(manga.descriptionFa) }
+    var coverUrl by remember(manga) { mutableStateOf(manga.coverUrl) }
+    var bannerUrl by remember(manga) { mutableStateOf(manga.bannerUrl) }
+    var chaptersCount by remember(manga) { mutableStateOf(manga.chaptersCount.toString()) }
+    var type by remember(manga) { mutableStateOf(manga.type) }
+    var genres by remember(manga) { mutableStateOf(manga.genres) }
+
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = androidx.compose.ui.Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1400)), // Admin Amber Gold border
+        border = BorderStroke(1.2.dp, Color(0xFFFFD700).copy(alpha = 0.8f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = androidx.compose.ui.Modifier.padding(14.dp),
+            horizontalAlignment = Alignment.End
+        ) {
+            Row(
+                modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { isEditing = !isEditing }
+                ) {
+                    Icon(
+                        imageVector = if (isEditing) Icons.Default.KeyboardArrowUp else Icons.Default.Edit,
+                        contentDescription = "ویرایش",
+                        tint = Color(0xFFFFD700)
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        "پنل مدیریت زنده کل مانهوا (مخصوص کبریا)",
+                        color = Color(0xFFFFD700),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Icon(Icons.Default.Settings, contentDescription = null, tint = Color(0xFFFFD700), modifier = androidx.compose.ui.Modifier.size(16.dp))
+                }
+            }
+
+            if (isEditing) {
+                Spacer(modifier = androidx.compose.ui.Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = titleFa,
+                    onValueChange = { titleFa = it },
+                    label = { Text("نام فارسی مانهوا") },
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                )
+
+                OutlinedTextField(
+                    value = titleEn,
+                    onValueChange = { titleEn = it },
+                    label = { Text("نام انگلیسی مانهوا") },
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                )
+
+                OutlinedTextField(
+                    value = descFa,
+                    onValueChange = { descFa = it },
+                    label = { Text("خلاصه داستان فارسی") },
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth().height(100.dp).padding(vertical = 4.dp)
+                )
+
+                OutlinedTextField(
+                    value = coverUrl,
+                    onValueChange = { coverUrl = it },
+                    label = { Text("آدرس تصویری کاور مانهوا") },
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                )
+
+                OutlinedTextField(
+                    value = bannerUrl,
+                    onValueChange = { bannerUrl = it },
+                    label = { Text("آدرس بنر بالای اثر") },
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                )
+
+                Row(
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = genres,
+                        onValueChange = { genres = it },
+                        label = { Text("ژانرها (جدا با کاما)") },
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                        modifier = androidx.compose.ui.Modifier.weight(1.2f).padding(vertical = 4.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = chaptersCount,
+                        onValueChange = { chaptersCount = it },
+                        label = { Text("تعداد چپتر") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                        modifier = androidx.compose.ui.Modifier.weight(0.8f).padding(vertical = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = androidx.compose.ui.Modifier.height(10.dp))
+
+                Row(
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { showDeleteConfirm = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = androidx.compose.ui.Modifier.weight(1f).height(40.dp)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White, modifier = androidx.compose.ui.Modifier.size(16.dp))
+                        Spacer(modifier = androidx.compose.ui.Modifier.width(4.dp))
+                        Text("حذف این اثر", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = {
+                            val countVal = chaptersCount.toIntOrNull() ?: manga.chaptersCount
+                            val updatedManga = manga.copy(
+                                titleFa = titleFa.trim(),
+                                titleEn = titleEn.trim(),
+                                descriptionFa = descFa.trim(),
+                                coverUrl = coverUrl.trim(),
+                                bannerUrl = bannerUrl.trim(),
+                                chaptersCount = countVal,
+                                genres = genres.trim()
+                            )
+                            viewModel.updateFullManga(updatedManga)
+                            Toast.makeText(context, "با موفقیت برای کل کاربران و پلتفرم بروزرسانی شد", Toast.LENGTH_SHORT).show()
+                            isEditing = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = androidx.compose.ui.Modifier.weight(1f).height(40.dp)
+                    ) {
+                        Icon(Icons.Default.Save, contentDescription = null, tint = Color.White, modifier = androidx.compose.ui.Modifier.size(16.dp))
+                        Spacer(modifier = androidx.compose.ui.Modifier.width(4.dp))
+                        Text("اعمال سراسری", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            if (showDeleteConfirm) {
+                Spacer(modifier = androidx.compose.ui.Modifier.height(10.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2C1010)),
+                    border = BorderStroke(1.dp, Color(0xFFFF5252)),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = androidx.compose.ui.Modifier.padding(10.dp),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            "آیا از حذف کامل مانهوا ${manga.titleFa} مطمئن هستید؟ این تغییر برای همه کاربران سراسر جهان اعمال موقت و فیزیکی می‌گردد.",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Right
+                        )
+                        Spacer(modifier = androidx.compose.ui.Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { showDeleteConfirm = false },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
+                                modifier = androidx.compose.ui.Modifier.height(32.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                            ) {
+                                Text("لغو", color = Color.White, fontSize = 11.sp)
+                            }
+
+                            Button(
+                                onClick = {
+                                    viewModel.deleteManga(manga.id)
+                                    Toast.makeText(context, "با موفقیت از دیتابیس حذف گردید.", Toast.LENGTH_SHORT).show()
+                                    showDeleteConfirm = false
+                                    onDeleted()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                                modifier = androidx.compose.ui.Modifier.height(32.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                            ) {
+                                Text("بله، کاملا حذف شود", color = Color.White, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

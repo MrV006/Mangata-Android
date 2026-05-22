@@ -46,7 +46,6 @@ fun AdminPanel(viewModel: MovieViewModel) {
         Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         horizontalAlignment = Alignment.End
     ) {

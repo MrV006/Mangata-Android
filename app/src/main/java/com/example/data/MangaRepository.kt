@@ -56,6 +56,10 @@ class MangaRepository(private val mangaDao: MangaDao) {
         mangaDao.insertMangas(listOf(manga))
     }
 
+    suspend fun deleteManga(id: Int) {
+        mangaDao.deleteMangaById(id)
+    }
+
     suspend fun insertAllMangas(mangas: List<MangaEntity>) {
         mangaDao.insertMangas(mangas)
     }

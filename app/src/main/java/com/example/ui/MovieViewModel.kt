@@ -1335,6 +1335,55 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateFullManga(manga: com.example.data.MangaEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.updateManga(manga)
+        }
+    }
+
+    fun deleteManga(mangaId: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.deleteManga(mangaId)
+        }
+    }
+
+    fun addNewManga(
+        titleFa: String,
+        titleEn: String,
+        descriptionFa: String,
+        coverUrl: String,
+        bannerUrl: String,
+        author: String = "نامشخص",
+        genres: String = "عاشقانه, فانتزی",
+        chaptersCount: Int = 10,
+        rating: Double = 4.8,
+        type: String = "مانهوا"
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = repository.allMangas.first()
+            val newId = (list.maxOfOrNull { it.id } ?: 0) + 1
+            val newManga = com.example.data.MangaEntity(
+                id = newId,
+                titleFa = titleFa,
+                titleEn = titleEn,
+                descriptionFa = descriptionFa,
+                coverUrl = coverUrl,
+                bannerUrl = bannerUrl,
+                author = author,
+                genres = genres,
+                chaptersCount = chaptersCount,
+                rating = rating,
+                type = type,
+                status = "در حال انتشار",
+                translatorTeam = "مانگاتا سنتر",
+                reviewsJson = "[]",
+                pagesJson = "[\"https://images.unsplash.com/photo-1541963463532-d68292c34b19\",\"https://images.unsplash.com/photo-1508921912186-1d1a45ebb3c1\",\"https://images.unsplash.com/photo-1517841905240-472988babdf9\"]",
+                isPremium = true
+            )
+            repository.updateManga(newManga)
+        }
+    }
+
     fun addMangaReview(mangaId: Int, author: String, text: String, rating: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             val list = repository.allMangas.first()
