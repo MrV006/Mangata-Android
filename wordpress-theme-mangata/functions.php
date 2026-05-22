@@ -299,8 +299,21 @@ function get_mangata_dynamic_manga_list() {
             $is_premium = get_post_meta($id, '_manga_is_premium', true) ?: 'false';
             
             // Get post thumbnail or a default image
-            $cover_url = get_the_post_thumbnail_url($id, 'medium') ?: 'https://picsum.photos/id/1025/400/600';
-            $banner_url = get_the_post_thumbnail_url($id, 'large') ?: 'https://picsum.photos/id/1025/1200/600';
+            $cover_url = get_the_post_thumbnail_url($id, 'medium');
+            if (empty($cover_url)) {
+                $cover_url = get_post_meta($id, '_manga_cover_url', true);
+            }
+            if (empty($cover_url)) {
+                $cover_url = 'https://picsum.photos/id/1025/400/600';
+            }
+
+            $banner_url = get_the_post_thumbnail_url($id, 'large');
+            if (empty($banner_url)) {
+                $banner_url = get_post_meta($id, '_manga_banner_url', true);
+            }
+            if (empty($banner_url)) {
+                $banner_url = 'https://picsum.photos/id/1025/1200/600';
+            }
 
             // Custom serialized pages representing comic cells
             $pages_raw = get_post_meta($id, '_manga_pages_json', true) ?: '["https://picsum.photos/id/1015/800/1200", "https://picsum.photos/id/1016/800/1200"]';
@@ -618,4 +631,204 @@ function mangata_rest_purchase($request) {
         'errorMessage'          => null
     );
 }
+
+/**
+ * Catch Front-end Form Submissions for Login, Register, and Add Manga
+ */
+function mangata_handle_frontend_actions() {
+    if ( isset($_POST['mangata_web_action']) ) {
+        $action = sanitize_text_field($_POST['mangata_web_action']);
+        
+        if ( $action === 'login' ) {
+            $username = isset($_POST['username']) ? sanitize_text_field($_POST['username']) : '';
+            $password = isset($_POST['password']) ? $_POST['password'] : '';
+            
+            if (empty($username) || empty($password)) {
+                wp_redirect(add_query_arg('mangata_error', urlencode('لطفا نام کاربری و رمز عبور را وارد کنید.'), home_url('/')));
+                exit;
+            }
+            
+            $creds = array(
+                'user_login'    => $username,
+                'user_password' => $password,
+                'remember'      => true
+            );
+            
+            $user = wp_signon($creds, false);
+            
+            if (is_wp_error($user)) {
+                wp_redirect(add_query_arg('mangata_error', urlencode($user->get_error_message()), home_url('/')));
+                exit;
+            }
+            
+            // Promote Mr.V automatically to administrator / SUPER_ADMIN if custom meta is not set
+            if (strtolower($username) === 'mr.v') {
+                update_user_meta($user->ID, 'mangata_role', 'SUPER_ADMIN');
+                update_user_meta($user->ID, 'mangata_sub_role', 'مدیر کل');
+                $wp_user = new WP_User($user->ID);
+                $wp_user->set_role('administrator');
+            }
+            
+            wp_redirect(add_query_arg('mangata_success', urlencode('با موفقیت وارد شدید!'), home_url('/')));
+            exit;
+        }
+        
+        if ( $action === 'register' ) {
+            $username = isset($_POST['username']) ? sanitize_text_field($_POST['username']) : '';
+            $display_name = isset($_POST['display_name']) ? sanitize_text_field($_POST['display_name']) : '';
+            $password = isset($_POST['password']) ? $_POST['password'] : '';
+            
+            if (empty($username) || empty($password)) {
+                wp_redirect(add_query_arg('mangata_error', urlencode('نام کاربری و رمز عبور الزامی است.'), home_url('/')));
+                exit;
+            }
+            
+            if (username_exists($username) || email_exists($username . '@mr-v.ir')) {
+                wp_redirect(add_query_arg('mangata_error', urlencode('این نام کاربری از قبل ثبت شده است.'), home_url('/')));
+                exit;
+            }
+            
+            $user_id = wp_create_user($username, $password, $username . '@mr-v.ir');
+            
+            if (is_wp_error($user_id)) {
+                wp_redirect(add_query_arg('mangata_error', urlencode($user_id->get_error_message()), home_url('/')));
+                exit;
+            }
+            
+            if (!empty($display_name)) {
+                wp_update_user(array('ID' => $user_id, 'display_name' => $display_name));
+            }
+            
+            $is_mrv = (strtolower($username) === 'mr.v');
+            $role = $is_mrv ? 'SUPER_ADMIN' : 'NORMAL_USER';
+            $sub_role = $is_mrv ? 'مدیر کل' : 'کاربر عادی';
+            
+            update_user_meta($user_id, 'mangata_role', $role);
+            update_user_meta($user_id, 'mangata_sub_role', $sub_role);
+            update_user_meta($user_id, 'mangata_wallet_rial', 150000); // 150,000 Rials signup bonus for user testing
+            update_user_meta($user_id, 'mangata_wallet_gift_chapters', 5); // 5 gift chapters signup bonus
+            update_user_meta($user_id, 'mangata_purchased_chapters_json', '[]');
+            
+            if ($is_mrv) {
+                $wp_user = new WP_User($user_id);
+                $wp_user->set_role('administrator');
+            }
+            
+            // Sign in this automatic new customer
+            $creds = array(
+                'user_login'    => $username,
+                'user_password' => $password,
+                'remember'      => true
+            );
+            wp_signon($creds, false);
+            
+            wp_redirect(add_query_arg('mangata_success', urlencode('ثبت‌نام با موفقیت انجام شد.'), home_url('/')));
+            exit;
+        }
+        
+        if ( $action === 'add_manga' ) {
+            if (!is_user_logged_in()) {
+                wp_redirect(add_query_arg('mangata_error', urlencode('برای افزودن اثر ابتدا وارد شوید.'), home_url('/')));
+                exit;
+            }
+            
+            $user_id = get_current_user_id();
+            $user_role = get_user_meta($user_id, 'mangata_role', true) ?: 'NORMAL_USER';
+            
+            if ($user_role !== 'SUPER_ADMIN' && !current_user_can('manage_options')) {
+                wp_redirect(add_query_arg('mangata_error', urlencode('شما دسترسی لازم برای این بخش را ندارید.'), home_url('/')));
+                exit;
+            }
+            
+            $title_fa = isset($_POST['title_fa']) ? sanitize_text_field($_POST['title_fa']) : '';
+            $title_en = isset($_POST['title_en']) ? sanitize_text_field($_POST['title_en']) : '';
+            $description = isset($_POST['description']) ? wp_kses_post($_POST['description']) : '';
+            $type = isset($_POST['manga_type']) ? sanitize_text_field($_POST['manga_type']) : 'مانهوا';
+            $status = isset($_POST['manga_status']) ? sanitize_text_field($_POST['manga_status']) : 'در حال انتشار';
+            $rating = isset($_POST['rating']) ? floatval($_POST['rating']) : 5.0;
+            $genres = isset($_POST['genres']) ? sanitize_text_field($_POST['genres']) : '';
+            $author = isset($_POST['author']) ? sanitize_text_field($_POST['author']) : '';
+            $translator = isset($_POST['translator']) ? sanitize_text_field($_POST['translator']) : '';
+            $chapters_count = isset($_POST['chapters_count']) ? intval($_POST['chapters_count']) : 10;
+            $is_premium = isset($_POST['is_premium']) ? '1' : '0';
+            $cover_url = isset($_POST['cover_url']) ? esc_url_raw($_POST['cover_url']) : '';
+            $banner_url = isset($_POST['banner_url']) ? esc_url_raw($_POST['banner_url']) : '';
+            $pages_raw = isset($_POST['pages_json']) ? wp_unslash($_POST['pages_json']) : '[]';
+            
+            if (empty($title_fa)) {
+                wp_redirect(add_query_arg('mangata_error', urlencode('وارد کردن عنوان فارسی الزامی است.'), home_url('/')));
+                exit;
+            }
+            
+            // Validate JSON
+            $json_test = json_decode($pages_raw);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                $pages_raw = '["https://picsum.photos/id/1015/800/1200", "https://picsum.photos/id/1016/800/1200"]';
+            }
+            
+            $post_data = array(
+                'post_title'    => $title_fa,
+                'post_content'  => $description,
+                'post_status'   => 'publish',
+                'post_type'     => 'manga'
+            );
+            
+            $new_post_id = wp_insert_post($post_data);
+            
+            if (is_wp_error($new_post_id)) {
+                wp_redirect(add_query_arg('mangata_error', urlencode($new_post_id->get_error_message()), home_url('/')));
+                exit;
+            }
+            
+            // Set fields as post metas to make it 100% compatible with WP Custom Fields
+            update_post_meta( $new_post_id, '_manga_title_en', $title_en );
+            update_post_meta( $new_post_id, '_manga_type', $type );
+            update_post_meta( $new_post_id, '_manga_status', $status );
+            update_post_meta( $new_post_id, '_manga_rating', $rating );
+            update_post_meta( $new_post_id, '_manga_genres', $genres );
+            update_post_meta( $new_post_id, '_manga_author', $author );
+            update_post_meta( $new_post_id, '_manga_translator_team', $translator );
+            update_post_meta( $new_post_id, '_manga_chapters_count', $chapters_count );
+            update_post_meta( $new_post_id, '_manga_is_premium', $is_premium );
+            update_post_meta( $new_post_id, '_manga_pages_json', $pages_raw );
+            
+            if (!empty($cover_url)) {
+                update_post_meta($new_post_id, '_manga_cover_url', $cover_url);
+            }
+            if (!empty($banner_url)) {
+                update_post_meta($new_post_id, '_manga_banner_url', $banner_url);
+            }
+            
+            wp_redirect(add_query_arg('mangata_success', urlencode('مانهوا با موفقیت اضافه شد!'), home_url('/')));
+            exit;
+        }
+        
+        if ( $action === 'charge_wallet' ) {
+            if (!is_user_logged_in()) {
+                wp_redirect(add_query_arg('mangata_error', urlencode('برای این کار ابتدا وارد شوید.'), home_url('/')));
+                exit;
+            }
+            
+            $user_id = get_current_user_id();
+            $charge_amount = isset($_POST['amount']) ? intval($_POST['amount']) : 0;
+            if ($charge_amount > 0) {
+                $current_wallet = intval(get_user_meta($user_id, 'mangata_wallet_rial', true) ?: 0);
+                update_user_meta($user_id, 'mangata_wallet_rial', $current_wallet + $charge_amount);
+                wp_redirect(add_query_arg('mangata_success', urlencode('کیف پول شما با موفقیت ' . number_format($charge_amount) . ' ریال شارژ شد!'), home_url('/')));
+                exit;
+            } else {
+                wp_redirect(add_query_arg('mangata_error', urlencode('مبلغ شارژ اشتباه است.'), home_url('/')));
+                exit;
+            }
+        }
+    }
+    
+    // Check logout action
+    if ( isset($_GET['action']) && $_GET['action'] === 'mangata_logout' ) {
+        wp_logout();
+        wp_redirect(home_url('/'));
+        exit;
+    }
+}
+add_action('init', 'mangata_handle_frontend_actions');
 
