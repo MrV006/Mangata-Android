@@ -208,7 +208,7 @@ fun ProfileDashboard(viewModel: MovieViewModel) {
                             
                             Button(
                                 onClick = {
-                                    viewModel.switchUser(6)
+                                    viewModel.switchUser(-1)
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF14171C)),
                                 border = BorderStroke(1.dp, Color(0xFFD32F2F).copy(alpha = 0.5f)),

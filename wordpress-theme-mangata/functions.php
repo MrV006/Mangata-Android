@@ -726,6 +726,85 @@ function mangata_handle_frontend_actions() {
             exit;
         }
         
+        if ( $action === 'batch_upload_zip' ) {
+            if (!is_user_logged_in()) {
+                wp_redirect(add_query_arg('mangata_error', urlencode('برای دسترسی ابتدا وارد شوید.'), home_url('/')));
+                exit;
+            }
+            
+            $user_id = get_current_user_id();
+            $user_role = get_user_meta($user_id, 'mangata_role', true) ?: 'NORMAL_USER';
+            if ($user_role !== 'SUPER_ADMIN' && !current_user_can('manage_options')) {
+                wp_redirect(add_query_arg('mangata_error', urlencode('شما دسترسی لازم برای این بخش را ندارید.'), home_url('/')));
+                exit;
+            }
+
+            if (!isset($_FILES['manga_zip']) || $_FILES['manga_zip']['error'] !== UPLOAD_ERR_OK) {
+                wp_redirect(add_query_arg('mangata_error', urlencode('خطا در بارگذاری فایل زیپ.'), home_url('/')));
+                exit;
+            }
+
+            $file_tmp = $_FILES['manga_zip']['tmp_name'];
+            $file_name = sanitize_file_name($_FILES['manga_zip']['name']);
+            
+            // Generate a unique folder name for extraction
+            $upload_dir = wp_upload_dir();
+            $batch_folder_name = 'mangata_batch_' . time() . '_' . wp_generate_password(6, false);
+            $target_dir = $upload_dir['basedir'] . '/mangata_batches/' . $batch_folder_name;
+            $target_url = $upload_dir['baseurl'] . '/mangata_batches/' . $batch_folder_name;
+
+            if ( !file_exists($target_dir) ) {
+                wp_mkdir_p($target_dir);
+            }
+
+            if (class_exists('ZipArchive')) {
+                $zip = new ZipArchive();
+                if ($zip->open($file_tmp) === TRUE) {
+                    $zip->extractTo($target_dir);
+                    $zip->close();
+
+                    // Recursively gather image files
+                    $images = [];
+                    $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($target_dir));
+                    foreach ($iterator as $file) {
+                        if ($file->isFile()) {
+                            $ext = strtolower(pathinfo($file->getPathname(), PATHINFO_EXTENSION));
+                            if (in_array($ext, array('jpg', 'jpeg', 'png', 'webp', 'gif'))) {
+                                // Calculate relative path from target_dir to support subfolders inside ZIP
+                                $rel_path = str_replace('\\', '/', substr($file->getPathname(), strlen($target_dir)));
+                                $rel_path = ltrim($rel_path, '/');
+                                $images[] = $target_url . '/' . $rel_path;
+                            }
+                        }
+                    }
+
+                    // Sort files naturally (like 1.jpg, 2.jpg, 10.jpg)
+                    natsort($images);
+                    $images = array_values($images);
+
+                    if (empty($images)) {
+                        wp_redirect(add_query_arg('mangata_error', urlencode('فایل زیپ فاقد هرگونه تصویر معتبر بود.'), home_url('/')));
+                        exit;
+                    }
+
+                    $json_array = json_encode($images, JSON_UNESCAPED_SLASHES);
+                    
+                    // Set option so administrative user can copy-paste it immediately!
+                    update_option('mangata_last_uploaded_batch_json', $json_array);
+                    update_option('mangata_last_uploaded_batch_name', $file_name);
+                    
+                    wp_redirect(add_query_arg('mangata_success', urlencode('بارگذاری دسته‌ای موفقیت‌آمیز بود! تصاویر استخراج و مپ شدند.'), home_url('/') . '#batch-uploader-console'));
+                    exit;
+                } else {
+                    wp_redirect(add_query_arg('mangata_error', urlencode('باز کردن زیپ با خطا مواجه شد.'), home_url('/')));
+                    exit;
+                }
+            } else {
+                wp_redirect(add_query_arg('mangata_error', urlencode('سرویس زیپ در سرور فعال نیست (ZipArchive not found).'), home_url('/')));
+                exit;
+            }
+        }
+
         if ( $action === 'add_manga' ) {
             if (!is_user_logged_in()) {
                 wp_redirect(add_query_arg('mangata_error', urlencode('برای افزودن اثر ابتدا وارد شوید.'), home_url('/')));

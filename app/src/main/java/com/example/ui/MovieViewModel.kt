@@ -100,7 +100,7 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Advanced features streams
-    private val _currentUserId = MutableStateFlow(sharedPrefs.getInt("logged_in_user_id", 6))
+    private val _currentUserId = MutableStateFlow(sharedPrefs.getInt("logged_in_user_id", -1))
     val currentUserId: StateFlow<Int> = _currentUserId.asStateFlow()
 
     val userAccounts: StateFlow<List<UserAccount>> = repository.allUserAccounts
@@ -220,7 +220,8 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
 
                 val current = database.mangaDao().getAllMangas().first()
                 if (current.isEmpty()) {
-                    Log.d(LOG_TAG, "Database is empty. Waiting for API sync...")
+                    Log.d(LOG_TAG, "Database is empty. Seeding local database...")
+                    repository.seedDatabase()
                 }
 
                 // Sync currently logged-in user wallet and purchases with WordPress on start

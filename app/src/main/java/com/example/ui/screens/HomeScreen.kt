@@ -56,6 +56,12 @@ fun HomeScreen(viewModel: MovieViewModel) {
     val showMyketBilling by viewModel.showMyketBillingDialog.collectAsState()
     val selectedSkuToBuy by viewModel.selectedSkuToBuy.collectAsState()
 
+    val currentUserAccount by viewModel.currentUserAccount.collectAsState()
+    if (currentUserAccount == null) {
+        MangaAuthScreen(viewModel = viewModel)
+        return
+    }
+
     val serverVersionCode by viewModel.serverVersionCode.collectAsState()
     if (serverVersionCode > 2) {
         ForcedUpdateScreen(onDownloadUpdate = {
@@ -1896,6 +1902,369 @@ fun MangaDetailOverlay(
             }
 
             Spacer(modifier = Modifier.height(30.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun MangaAuthScreen(viewModel: MovieViewModel) {
+    var loginMode by remember { mutableStateOf(true) } // true: Login, false: Register
+    var uUsername by remember { mutableStateOf("") }
+    var uPassword by remember { mutableStateOf("") }
+    var uDisplayName by remember { mutableStateOf("") }
+    var authError by remember { mutableStateOf("") }
+    var authSuccess by remember { mutableStateOf("") }
+    val context = LocalContext.current
+
+    val siteDomain by viewModel.siteDomain.collectAsState()
+    var inputDomain by remember { mutableStateOf(siteDomain) }
+    var showDomainSettings by remember { mutableStateOf(false) }
+
+    LaunchedEffect(siteDomain) {
+        inputDomain = siteDomain
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0F1115))
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 450.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Elegant modern avatar/M logo
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(Color(0xFF00C6FF), Color(0xFF0072FF)))),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "M",
+                    color = Color.White,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Black
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "باشگاه خوانندگان مانگاتا",
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Black
+            )
+
+            Text(
+                text = "برای ادامه، لطفاً وارد حساب خود شوید یا عضو جدید ثبت‌نام کنید.",
+                color = Color.Gray,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 6.dp, bottom = 12.dp)
+            )
+
+            // Dynamic server domain setup option directly on the Lock Screen!
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showDomainSettings = !showDomainSettings }
+                    .padding(vertical = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "تنظیمات سرور",
+                    tint = Color(0xFF00C6FF),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "تنظیم آدرس اتصال به سایت (سرور فعلی: ${siteDomain.replace("https://", "").replace("http://", "")})",
+                    color = Color(0xFF00C6FF),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            if (showDomainSettings) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2229)),
+                    border = BorderStroke(1.dp, Color(0xFF00C6FF).copy(alpha = 0.4f)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            "آدرس دامنه سایت وردپرسی جهت برقراری سنکرون:",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Right,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = inputDomain,
+                            onValueChange = { inputDomain = it },
+                            placeholder = { Text("مثال: https://mr-v.ir") },
+                            modifier = Modifier.fillMaxWidth().testTag("auth_server_domain_input"),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFF00C6FF),
+                                unfocusedBorderColor = Color(0xFF2D3139)
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = {
+                                viewModel.updateSiteDomain(inputDomain.trim())
+                                Toast.makeText(context, "آدرس سایت با موفقیت تغییر کرد.", Toast.LENGTH_SHORT).show()
+                                showDomainSettings = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0055B3)),
+                            modifier = Modifier.fillMaxWidth().height(38.dp),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text("اعمال و اتصال به دامنه فوق", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // Auth card with border
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF16191E)),
+                border = BorderStroke(1.dp, Color(0xFF2D3139)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    // Segmented state toggle buttons
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF0F1115), RoundedCornerShape(8.dp))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Button(
+                            onClick = { loginMode = false; authError = ""; authSuccess = "" },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (!loginMode) Color(0xFF16191E) else Color.Transparent
+                            ),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(6.dp),
+                            elevation = null
+                        ) {
+                            Text(
+                                "عضویت جدید",
+                                color = if (!loginMode) Color.White else Color.Gray,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Button(
+                            onClick = { loginMode = true; authError = ""; authSuccess = "" },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (loginMode) Color(0xFF16191E) else Color.Transparent
+                            ),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(6.dp),
+                            elevation = null
+                        ) {
+                            Text(
+                                "ورود به حساب",
+                                color = if (loginMode) Color.White else Color.Gray,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    if (authError.isNotBlank()) {
+                        Text(
+                            text = authError,
+                            color = Color(0xFFFF5252),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(bottom = 12.dp),
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Right
+                        )
+                    }
+
+                    if (authSuccess.isNotBlank()) {
+                        Text(
+                            text = authSuccess,
+                            color = Color(0xFF69F0AE),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(bottom = 12.dp),
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Right
+                        )
+                    }
+
+                    // Field 1: Username
+                    Text(
+                        "نام کاربری (حروف انگلیسی) (*)",
+                        color = Color.LightGray,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                        fontWeight = FontWeight.Bold
+                    )
+                    OutlinedTextField(
+                        value = uUsername,
+                        onValueChange = { uUsername = it },
+                        placeholder = { Text("مثال: amirreza") },
+                        modifier = Modifier.fillMaxWidth().testTag("auth_username_input"),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF00C6FF),
+                            unfocusedBorderColor = Color(0xFF2D3139)
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+
+                    // Field 2: Display Name (only in Registration Mode)
+                    if (!loginMode) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "نام نمایشی شما (فارسی / انگلیسی)",
+                            color = Color.LightGray,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                            fontWeight = FontWeight.Bold
+                        )
+                        OutlinedTextField(
+                            value = uDisplayName,
+                            onValueChange = { uDisplayName = it },
+                            placeholder = { Text("مثال: امیررضا") },
+                            modifier = Modifier.fillMaxWidth().testTag("auth_displayname_input"),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFFFFD700),
+                                unfocusedBorderColor = Color(0xFF2D3139)
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Field 3: Password
+                    Text(
+                        "رمز عبور امن (*)",
+                        color = Color.LightGray,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                        fontWeight = FontWeight.Bold
+                    )
+                    OutlinedTextField(
+                        value = uPassword,
+                        onValueChange = { uPassword = it },
+                        placeholder = { Text("••••••••") },
+                        modifier = Modifier.fillMaxWidth().testTag("auth_password_input"),
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF00C6FF),
+                            unfocusedBorderColor = Color(0xFF2D3139)
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    if (loginMode) {
+                        Button(
+                            onClick = {
+                                if (uUsername.isBlank() || uPassword.isBlank()) {
+                                    authError = "نام کاربری و کلمه‌ی عبور الزامی است."
+                                } else {
+                                    viewModel.loginUser(
+                                        usernameInput = uUsername.trim(),
+                                        passwordInput = uPassword,
+                                        onSuccess = {
+                                            authSuccess = "ورود موفقیت‌آمیز بود!"
+                                            authError = ""
+                                            Toast.makeText(context, "خوش آمدید!", Toast.LENGTH_SHORT).show()
+                                        },
+                                        onError = {
+                                            authError = it
+                                            authSuccess = ""
+                                        }
+                                    )
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C6FF)),
+                            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("auth_login_button"),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("ورود امن و سنکرون با دیتابیس", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                if (uUsername.isBlank() || uPassword.isBlank()) {
+                                    authError = "نام کاربری و کلمه‌ی عبور الزامی است."
+                                } else {
+                                    viewModel.registerNewUser(
+                                        username = uUsername.trim(),
+                                        displayName = if (uDisplayName.isBlank()) uUsername.trim() else uDisplayName.trim(),
+                                        passwordInput = uPassword,
+                                        onSuccess = {
+                                            authSuccess = "ثبت‌نام زنده و دریافت شارژ موفقیت‌آمیز بود!"
+                                            authError = ""
+                                            Toast.makeText(context, "با عضویت شما، شارژ کیف‌پول هدیه اعمال شد!", Toast.LENGTH_LONG).show()
+                                        },
+                                        onError = {
+                                            authError = it
+                                            authSuccess = ""
+                                        }
+                                    )
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700)),
+                            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("auth_register_button"),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("ثبت‌نام جدید و دریافت شارژ هدیه", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
         }
     }
 }
