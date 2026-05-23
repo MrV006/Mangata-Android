@@ -645,6 +645,7 @@ fun LibraryDashboard(viewModel: MovieViewModel) {
 fun BookmarksDashboard(viewModel: MovieViewModel) {
     val bookmarks by viewModel.bookmarks.collectAsState()
     val mangas by viewModel.mangas.collectAsState()
+    val currentUser by viewModel.currentUserAccount.collectAsState()
 
     val bookmarkedMangas = remember(bookmarks, mangas) {
         val favoritedIds = bookmarks.map { it.mangaId }
@@ -657,13 +658,64 @@ fun BookmarksDashboard(viewModel: MovieViewModel) {
             .padding(horizontal = 20.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.End
     ) {
-        Text(
-            "لیست نشان‌شده‌های شما",
-            color = Color.White,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Black,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (currentUser != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .background(Color(0xFF59B259).copy(alpha = 0.15f), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Cloud,
+                        contentDescription = "همگام‌سازی ابری فعال",
+                        tint = Color(0xFF59B259),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        "همگام با وردپرس",
+                        color = Color(0xFF59B259),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CloudOff,
+                        contentDescription = "بدون اتصال به حساب ابری",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        "محدود به حافظه داخلی",
+                        color = Color.Gray,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Text(
+                "لیست نشان‌شده‌های شما",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black
+            )
+        }
 
         if (bookmarkedMangas.isEmpty()) {
             Box(

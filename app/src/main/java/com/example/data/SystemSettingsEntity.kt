@@ -16,5 +16,11 @@ data class SystemSettingsEntity(
     val shareCleanerPct: Int = 30,
     val shareEditorPct: Int = 30,
     val shareTranslatorPct: Int = 20,
-    val sharePlatformPct: Int = 20
+    val sharePlatformPct: Int = 20,
+    val isTranslatorTestUploaded: Boolean = true,
+    val isCleanerTestUploaded: Boolean = false,
+    val isTypistTestUploaded: Boolean = false,
+    val requiredVersion: Int = 2,
+    val featuredMangaIdsJson: String = "[]",
+    val startsFromZeroMangaIdsJson: String = "[]"
 )

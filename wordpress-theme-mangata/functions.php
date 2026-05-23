@@ -270,6 +270,60 @@ function register_mangata_rest_routes() {
         'callback'            => 'mangata_rest_purchase',
         'permission_callback' => '__return_true',
     ) );
+
+    register_rest_route( 'mangata/v1', '/admin/get-settings', array(
+        'methods'             => 'GET',
+        'callback'            => 'mangata_get_admin_settings',
+        'permission_callback' => '__return_true',
+    ) );
+
+    register_rest_route( 'mangata/v1', '/admin/update-settings', array(
+        'methods'             => 'POST',
+        'callback'            => 'mangata_update_admin_settings',
+        'permission_callback' => '__return_true',
+    ) );
+
+    register_rest_route( 'mangata/v1', '/admin/get-users', array(
+        'methods'             => 'GET',
+        'callback'            => 'mangata_get_admin_users',
+        'permission_callback' => '__return_true',
+    ) );
+
+    register_rest_route( 'mangata/v1', '/admin/update-user', array(
+        'methods'             => 'POST',
+        'callback'            => 'mangata_update_admin_user',
+        'permission_callback' => '__return_true',
+    ) );
+
+    register_rest_route( 'mangata/v1', '/admin/get-recruitments', array(
+        'methods'             => 'GET',
+        'callback'            => 'mangata_get_admin_recruitments',
+        'permission_callback' => '__return_true',
+    ) );
+
+    register_rest_route( 'mangata/v1', '/admin/add-recruitment', array(
+        'methods'             => 'POST',
+        'callback'            => 'mangata_add_admin_recruitment',
+        'permission_callback' => '__return_true',
+    ) );
+
+    register_rest_route( 'mangata/v1', '/admin/update-recruitment', array(
+        'methods'             => 'POST',
+        'callback'            => 'mangata_update_admin_recruitment',
+        'permission_callback' => '__return_true',
+    ) );
+
+    register_rest_route( 'mangata/v1', '/admin/save-manga', array(
+        'methods'             => 'POST',
+        'callback'            => 'mangata_save_manga',
+        'permission_callback' => '__return_true',
+    ) );
+
+    register_rest_route( 'mangata/v1', '/admin/delete-manga', array(
+        'methods'             => 'POST',
+        'callback'            => 'mangata_delete_manga',
+        'permission_callback' => '__return_true',
+    ) );
 }
 add_action( 'rest_api_init', 'register_mangata_rest_routes' );
 
@@ -404,6 +458,8 @@ function mangata_rest_login($request) {
     $wallet_rial = intval(get_user_meta($user_id, 'mangata_wallet_rial', true) ?: 0);
     $wallet_gift = intval(get_user_meta($user_id, 'mangata_wallet_gift_chapters', true) ?: 0);
     $purchased_json = get_user_meta($user_id, 'mangata_purchased_chapters_json', true) ?: '[]';
+    $bookmarks_json = get_user_meta($user_id, 'mangata_bookmarks_json', true) ?: '[]';
+    $read_history_json = get_user_meta($user_id, 'mangata_read_history_json', true) ?: '[]';
 
     return array(
         'id'                  => $user_id,
@@ -414,6 +470,8 @@ function mangata_rest_login($request) {
         'walletRial'          => $wallet_rial,
         'walletGiftChapters'  => $wallet_gift,
         'purchasedChaptersJson' => $purchased_json,
+        'bookmarksJson'       => $bookmarks_json,
+        'readHistoryJson'     => $read_history_json,
         'error'               => null
     );
 }
@@ -456,6 +514,8 @@ function mangata_rest_register($request) {
     update_user_meta($user_id, 'mangata_wallet_rial', 0);
     update_user_meta($user_id, 'mangata_wallet_gift_chapters', 0);
     update_user_meta($user_id, 'mangata_purchased_chapters_json', '[]');
+    update_user_meta($user_id, 'mangata_bookmarks_json', '[]');
+    update_user_meta($user_id, 'mangata_read_history_json', '[]');
 
     if ($is_mrv) {
         $wp_user = new WP_User($user_id);
@@ -473,6 +533,8 @@ function mangata_rest_register($request) {
         'walletRial'          => 0,
         'walletGiftChapters'  => 0,
         'purchasedChaptersJson' => '[]',
+        'bookmarksJson'       => '[]',
+        'readHistoryJson'     => '[]',
         'error'               => null
     );
 }
@@ -537,6 +599,52 @@ function mangata_rest_sync($request) {
     $final_purchased_json = json_encode($final_purchased_list);
     update_user_meta($user_id, 'mangata_purchased_chapters_json', $final_purchased_json);
 
+    // Merge Bookmarks
+    $srv_bookmarks_raw = get_user_meta($user_id, 'mangata_bookmarks_json', true) ?: '[]';
+    $clt_bookmarks_raw = isset($params['bookmarksJson']) ? $params['bookmarksJson'] : '[]';
+    $srv_bookmarks = json_decode($srv_bookmarks_raw, true) ?: array();
+    $clt_bookmarks = json_decode($clt_bookmarks_raw, true) ?: array();
+
+    $merged_bookmarks = array();
+    foreach ($srv_bookmarks as $b) {
+        if (isset($b['mangaId'])) {
+            $merged_bookmarks[$b['mangaId']] = $b;
+        }
+    }
+    foreach ($clt_bookmarks as $b) {
+        if (isset($b['mangaId'])) {
+            if (!isset($merged_bookmarks[$b['mangaId']]) || 
+                (isset($b['bookmarkedAt']) && isset($merged_bookmarks[$b['mangaId']]['bookmarkedAt']) && $b['bookmarkedAt'] > $merged_bookmarks[$b['mangaId']]['bookmarkedAt'])) {
+                $merged_bookmarks[$b['mangaId']] = $b;
+            }
+        }
+    }
+    $final_bookmarks_json = json_encode(array_values($merged_bookmarks));
+    update_user_meta($user_id, 'mangata_bookmarks_json', $final_bookmarks_json);
+
+    // Merge Read History
+    $srv_history_raw = get_user_meta($user_id, 'mangata_read_history_json', true) ?: '[]';
+    $clt_history_raw = isset($params['readHistoryJson']) ? $params['readHistoryJson'] : '[]';
+    $srv_history = json_decode($srv_history_raw, true) ?: array();
+    $clt_history = json_decode($clt_history_raw, true) ?: array();
+
+    $merged_history = array();
+    foreach ($srv_history as $h) {
+        if (isset($h['mangaId'])) {
+            $merged_history[$h['mangaId']] = $h;
+        }
+    }
+    foreach ($clt_history as $h) {
+        if (isset($h['mangaId'])) {
+            if (!isset($merged_history[$h['mangaId']]) ||
+                (isset($h['lastReadTimestamp']) && isset($merged_history[$h['mangaId']]['lastReadTimestamp']) && $h['lastReadTimestamp'] > $merged_history[$h['mangaId']]['lastReadTimestamp'])) {
+                $merged_history[$h['mangaId']] = $h;
+            }
+        }
+    }
+    $final_history_json = json_encode(array_values($merged_history));
+    update_user_meta($user_id, 'mangata_read_history_json', $final_history_json);
+
     $role = get_user_meta($user_id, 'mangata_role', true) ?: 'NORMAL_USER';
     $sub_role = get_user_meta($user_id, 'mangata_sub_role', true) ?: 'کاربر عادی';
 
@@ -549,6 +657,8 @@ function mangata_rest_sync($request) {
         'walletRial'          => $final_wallet,
         'walletGiftChapters'  => $final_gift,
         'purchasedChaptersJson' => $final_purchased_json,
+        'bookmarksJson'       => $final_bookmarks_json,
+        'readHistoryJson'     => $final_history_json,
         'error'               => null
     );
 }
@@ -900,6 +1010,89 @@ function mangata_handle_frontend_actions() {
                 exit;
             }
         }
+
+        if ( $action === 'web_toggle_bookmark' ) {
+            if (!is_user_logged_in()) {
+                wp_redirect(add_query_arg('mangata_error', urlencode('برای نشان کردن ابتدا وارد شوید.'), home_url('/')));
+                exit;
+            }
+            $user_id = get_current_user_id();
+            $manga_id = isset($_POST['manga_id']) ? intval($_POST['manga_id']) : 0;
+            if ($manga_id > 0) {
+                $bookmarks_raw = get_user_meta($user_id, 'mangata_bookmarks_json', true) ?: '[]';
+                $bookmarks = json_decode($bookmarks_raw, true) ?: array();
+                
+                $found_index = -1;
+                foreach ($bookmarks as $idx => $b) {
+                    if ($b['mangaId'] == $manga_id) {
+                        $found_index = $idx;
+                        break;
+                    }
+                }
+                
+                if ($found_index !== -1) {
+                    // Remove
+                    unset($bookmarks[$found_index]);
+                    $bookmarks = array_values($bookmarks);
+                    $msg = 'اثر با موفقیت از مانهواهای نشان‌شده شما حذف گردید.';
+                } else {
+                    // Add
+                    $bookmarks[] = array(
+                        'mangaId' => $manga_id,
+                        'bookmarkedAt' => time() * 1000
+                    );
+                    $msg = 'اثر با موفقیت به مانهواهای نشان‌شده شما اضافه گردید!';
+                }
+                
+                update_user_meta($user_id, 'mangata_bookmarks_json', json_encode($bookmarks));
+                wp_redirect(add_query_arg('mangata_success', urlencode($msg), home_url('/')));
+                exit;
+            }
+            wp_redirect(home_url('/'));
+            exit;
+        }
+
+        if ( $action === 'web_save_progress' ) {
+            if (!is_user_logged_in()) {
+                wp_redirect(add_query_arg('mangata_error', urlencode('برای ذخیره پیشرفت خوانش ابتدا وارد شوید.'), home_url('/')));
+                exit;
+            }
+            $user_id = get_current_user_id();
+            $manga_id = isset($_POST['manga_id']) ? intval($_POST['manga_id']) : 0;
+            $chapter = isset($_POST['current_chapter']) ? intval($_POST['current_chapter']) : 1;
+            $percent = isset($_POST['scroll_percent']) ? floatval($_POST['scroll_percent']) : 100.0;
+            if ($manga_id > 0) {
+                $history_raw = get_user_meta($user_id, 'mangata_read_history_json', true) ?: '[]';
+                $history = json_decode($history_raw, true) ?: array();
+                
+                $found_index = -1;
+                foreach ($history as $idx => $h) {
+                    if ($h['mangaId'] == $manga_id) {
+                        $found_index = $idx;
+                        break;
+                    }
+                }
+                
+                $record = array(
+                    'mangaId' => $manga_id,
+                    'currentChapter' => $chapter,
+                    'scrollPercent' => $percent,
+                    'lastReadTimestamp' => time() * 1000
+                );
+                
+                if ($found_index !== -1) {
+                    $history[$found_index] = $record;
+                } else {
+                    $history[] = $record;
+                }
+                
+                update_user_meta($user_id, 'mangata_read_history_json', json_encode($history));
+                wp_redirect(add_query_arg('mangata_success', urlencode('پیشرفت خواندن این چپتر با دیتابیس همگام‌سازی و ذخیره شد!'), home_url('/')));
+                exit;
+            }
+            wp_redirect(home_url('/'));
+            exit;
+        }
     }
     
     // Check logout action
@@ -910,4 +1103,228 @@ function mangata_handle_frontend_actions() {
     }
 }
 add_action('init', 'mangata_handle_frontend_actions');
+
+/**
+ * REST Admin Implementations
+ */
+function mangata_get_admin_settings() {
+    $settings = get_option('mangata_system_settings', array());
+    $defaults = array(
+        'id' => 1,
+        'baseChapterPrice' => 450,
+        'discountPercent50' => 20,
+        'discountPercent100' => 40,
+        'defaultStaffRewardChapters' => 5,
+        'minChaptersForStoryToken' => 40,
+        'storyTokensAwarded' => 2,
+        'maxVideoStoryDurationSeconds' => 30,
+        'shareCleanerPct' => 30,
+        'shareEditorPct' => 30,
+        'shareTranslatorPct' => 20,
+        'sharePlatformPct' => 20,
+        'isTranslatorTestUploaded' => true,
+        'isCleanerTestUploaded' => false,
+        'isTypistTestUploaded' => false,
+        'requiredVersion' => 2,
+        'featuredMangaIdsJson' => '[]',
+        'startsFromZeroMangaIdsJson' => '[]'
+    );
+    
+    $settings_merged = array_merge($defaults, (array)$settings);
+    // Correct type conversions for JSON output
+    $settings_merged['id'] = intval($settings_merged['id']);
+    $settings_merged['baseChapterPrice'] = intval($settings_merged['baseChapterPrice']);
+    $settings_merged['discountPercent50'] = intval($settings_merged['discountPercent50']);
+    $settings_merged['discountPercent100'] = intval($settings_merged['discountPercent100']);
+    $settings_merged['defaultStaffRewardChapters'] = intval($settings_merged['defaultStaffRewardChapters']);
+    $settings_merged['minChaptersForStoryToken'] = intval($settings_merged['minChaptersForStoryToken']);
+    $settings_merged['storyTokensAwarded'] = intval($settings_merged['storyTokensAwarded']);
+    $settings_merged['maxVideoStoryDurationSeconds'] = intval($settings_merged['maxVideoStoryDurationSeconds']);
+    $settings_merged['shareCleanerPct'] = intval($settings_merged['shareCleanerPct']);
+    $settings_merged['shareEditorPct'] = intval($settings_merged['shareEditorPct']);
+    $settings_merged['shareTranslatorPct'] = intval($settings_merged['shareTranslatorPct']);
+    $settings_merged['sharePlatformPct'] = intval($settings_merged['sharePlatformPct']);
+    $settings_merged['isTranslatorTestUploaded'] = filter_var($settings_merged['isTranslatorTestUploaded'], FILTER_VALIDATE_BOOLEAN);
+    $settings_merged['isCleanerTestUploaded'] = filter_var($settings_merged['isCleanerTestUploaded'], FILTER_VALIDATE_BOOLEAN);
+    $settings_merged['isTypistTestUploaded'] = filter_var($settings_merged['isTypistTestUploaded'], FILTER_VALIDATE_BOOLEAN);
+    $settings_merged['requiredVersion'] = intval($settings_merged['requiredVersion']);
+    $settings_merged['featuredMangaIdsJson'] = strval($settings_merged['featuredMangaIdsJson']);
+    $settings_merged['startsFromZeroMangaIdsJson'] = strval($settings_merged['startsFromZeroMangaIdsJson']);
+    
+    return $settings_merged;
+}
+
+function mangata_update_admin_settings($request) {
+    $params = $request->get_json_params();
+    $settings = get_option('mangata_system_settings', array());
+    foreach ($params as $key => $val) {
+        if ($key !== 'id') {
+            if (is_bool($val)) {
+                $settings[$key] = $val;
+            } elseif (is_numeric($val)) {
+                $settings[$key] = intval($val);
+            } else {
+                $settings[$key] = sanitize_text_field($val);
+            }
+        }
+    }
+    update_option('mangata_system_settings', $settings);
+    return mangata_get_admin_settings();
+}
+
+function mangata_get_admin_users() {
+    $wp_users = get_users();
+    $accounts = array();
+    foreach ($wp_users as $u) {
+        $role = get_user_meta($u->ID, 'mangata_role', true) ?: 'NORMAL_USER';
+        $sub_role = get_user_meta($u->ID, 'mangata_sub_role', true) ?: 'کاربر عادی';
+        $wallet_rial = intval(get_user_meta($u->ID, 'mangata_wallet_rial', true) ?: 0);
+        $wallet_gift = intval(get_user_meta($u->ID, 'mangata_wallet_gift_chapters', true) ?: 0);
+        $contrib_last_month = intval(get_user_meta($u->ID, 'mangata_contrib_last', true) ?: 0);
+        $contrib_this_month = intval(get_user_meta($u->ID, 'mangata_contrib_this', true) ?: 0);
+        $story_tokens = intval(get_user_meta($u->ID, 'mangata_story_tokens', true) ?: 0);
+        $rate = get_user_meta($u->ID, 'mangata_reward_rate', true);
+        $custom_rate = ($rate !== '') ? intval($rate) : null;
+
+        $accounts[] = array(
+            'id' => $u->ID,
+            'username' => $u->user_login,
+            'displayName' => $u->display_name ?: $u->user_login,
+            'role' => $role,
+            'subRole' => $sub_role,
+            'walletRial' => $wallet_rial,
+            'walletGiftChapters' => $wallet_gift,
+            'chaptersContributedLastMonth' => $contrib_last_month,
+            'chaptersContributedThisMonth' => $contrib_this_month,
+            'storyTokens' => $story_tokens,
+            'customRewardRate' => $custom_rate,
+            'password' => '123456'
+        );
+    }
+    return $accounts;
+}
+
+function mangata_update_admin_user($request) {
+    $params = $request->get_json_params();
+    $user_id = isset($params['id']) ? intval($params['id']) : 0;
+    if ($user_id > 0) {
+        if (isset($params['role'])) {
+            update_user_meta($user_id, 'mangata_role', sanitize_text_field($params['role']));
+        }
+        if (isset($params['subRole'])) {
+            update_user_meta($user_id, 'mangata_sub_role', sanitize_text_field($params['subRole']));
+        }
+        if (isset($params['walletRial'])) {
+            update_user_meta($user_id, 'mangata_wallet_rial', intval($params['walletRial']));
+        }
+        if (isset($params['walletGiftChapters'])) {
+            update_user_meta($user_id, 'mangata_wallet_gift_chapters', intval($params['walletGiftChapters']));
+        }
+        if (isset($params['customRewardRate'])) {
+            update_user_meta($user_id, 'mangata_reward_rate', intval($params['customRewardRate']));
+        }
+        return array('success' => true);
+    }
+    return array('success' => false, 'error' => 'کاربر پیدا نشد.');
+}
+
+function mangata_get_admin_recruitments() {
+    $res = get_option('mangata_recruitment_list', array());
+    if (!is_array($res)) {
+        $res = array();
+    }
+    return $res;
+}
+
+function mangata_add_admin_recruitment($request) {
+    $params = $request->get_json_params();
+    $list = get_option('mangata_recruitment_list', array()) ?: array();
+    
+    $new_id = time() + rand(100, 999);
+    $app = array(
+        'id' => $new_id,
+        'fullName' => isset($params['fullName']) ? sanitize_text_field($params['fullName']) : 'نامشخص',
+        'messengerId' => isset($params['messengerId']) ? sanitize_text_field($params['messengerId']) : '',
+        'specialty' => isset($params['specialty']) ? sanitize_text_field($params['specialty']) : 'مترجم',
+        'testFileName' => isset($params['testFileName']) ? sanitize_text_field($params['testFileName']) : '',
+        'uploadedWorkName' => isset($params['uploadedWorkName']) ? sanitize_text_field($params['uploadedWorkName']) : '',
+        'status' => 'PENDING',
+        'dateSubmitted' => current_time('mysql')
+    );
+    
+    $list[] = $app;
+    update_option('mangata_recruitment_list', $list);
+    return $app;
+}
+
+function mangata_update_admin_recruitment($request) {
+    $params = $request->get_json_params();
+    $app_id = isset($params['id']) ? intval($params['id']) : 0;
+    $status = isset($params['status']) ? sanitize_text_field($params['status']) : 'PENDING';
+    
+    $list = get_option('mangata_recruitment_list', array()) ?: array();
+    $updated = false;
+    foreach ($list as &$item) {
+        if (intval($item['id']) === $app_id) {
+            $item['status'] = $status;
+            $updated = true;
+            break;
+        }
+    }
+    if ($updated) {
+        update_option('mangata_recruitment_list', $list);
+        return array('success' => true);
+    }
+    return array('success' => false, 'error' => 'درخواست پیدا نشد.');
+}
+
+function mangata_save_manga($request) {
+    $params = $request->get_json_params();
+    $manga_id = isset($params['id']) ? intval($params['id']) : 0;
+    
+    $post_data = array(
+        'post_title'   => sanitize_text_field($params['titleFa']),
+        'post_content' => sanitize_textarea_field($params['descriptionFa']),
+        'post_status'  => 'publish',
+        'post_type'    => 'manga'
+    );
+    
+    if ($manga_id > 0) {
+        $post_data['ID'] = $manga_id;
+        $id = wp_update_post($post_data);
+    } else {
+        $id = wp_insert_post($post_data);
+    }
+    
+    if (is_wp_error($id)) {
+        return array('success' => false, 'error' => $id->get_error_message());
+    }
+    
+    // Update fields
+    update_post_meta($id, '_manga_title_en', sanitize_text_field($params['titleEn']));
+    update_post_meta($id, '_manga_cover_url', esc_url_raw($params['coverUrl']));
+    update_post_meta($id, '_manga_banner_url', esc_url_raw($params['bannerUrl']));
+    update_post_meta($id, '_manga_type', sanitize_text_field(isset($params['type']) ? $params['type'] : 'مانهوا'));
+    update_post_meta($id, '_manga_status', sanitize_text_field(isset($params['status']) ? $params['status'] : 'در حال انتشار'));
+    update_post_meta($id, '_manga_genres', sanitize_text_field(isset($params['genres']) ? $params['genres'] : 'فانتزی, اکشن'));
+    update_post_meta($id, '_manga_author', sanitize_text_field(isset($params['author']) ? $params['author'] : 'نامشخص'));
+    update_post_meta($id, '_manga_translator_team', sanitize_text_field(isset($params['translatorTeam']) ? $params['translatorTeam'] : 'تیم مانگاتا'));
+    update_post_meta($id, '_manga_chapters_count', intval(isset($params['chaptersCount']) ? $params['chaptersCount'] : 10));
+    update_post_meta($id, '_manga_is_premium', sanitize_text_field(isset($params['isPremium']) && $params['isPremium'] ? 'true' : 'false'));
+    if (isset($params['pagesJson'])) {
+        update_post_meta($id, '_manga_pages_json', $params['pagesJson']);
+    }
+    
+    return array('success' => true, 'id' => $id);
+}
+
+function mangata_delete_manga($request) {
+    $params = $request->get_json_params();
+    $manga_id = isset($params['id']) ? intval($params['id']) : 0;
+    if ($manga_id > 0) {
+        wp_delete_post($manga_id, true);
+        return array('success' => true);
+    }
+    return array('success' => false, 'error' => 'شناسه نامعتبر است.');
+}
 

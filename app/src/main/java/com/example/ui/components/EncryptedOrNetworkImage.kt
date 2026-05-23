@@ -28,7 +28,8 @@ fun EncryptedOrNetworkImage(
     isDownloaded: Boolean,
     contentDescription: String,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.FillWidth
+    contentScale: ContentScale = ContentScale.FillWidth,
+    compressionActive: Boolean = false
 ) {
     val context = LocalContext.current
     
@@ -60,12 +61,40 @@ fun EncryptedOrNetworkImage(
             }
         }
     } else {
-        val imageRequest = remember(url) {
-            ImageRequest.Builder(context)
-                .data(url)
-                .diskCachePolicy(CachePolicy.DISABLED)
-                .memoryCachePolicy(CachePolicy.DISABLED)
-                .build()
+        val optimizedUrl = remember(url, compressionActive) {
+            if (compressionActive && url.contains("unsplash.com")) {
+                var opt = url
+                opt = opt.replace(Regex("&w=\\d+"), "")
+                    .replace(Regex("w=\\d+&?"), "")
+                    .replace(Regex("&q=\\d+"), "")
+                    .replace(Regex("q=\\d+&?"), "")
+                    .replace(Regex("&fm=\\w+"), "")
+                    .replace(Regex("fm=\\w+&?"), "")
+                if (opt.contains("?")) {
+                    opt + "&w=480&q=40&fm=webp"
+                } else {
+                    opt + "?w=480&q=40&fm=webp"
+                }
+            } else {
+                url
+            }
+        }
+
+        val imageRequest = remember(optimizedUrl, compressionActive) {
+            val builder = ImageRequest.Builder(context)
+                .data(optimizedUrl)
+            
+            if (compressionActive) {
+                builder.diskCachePolicy(CachePolicy.ENABLED)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
+                    .bitmapConfig(android.graphics.Bitmap.Config.RGB_565)
+                    .precision(coil.size.Precision.INEXACT)
+                    .size(480, 800)
+            } else {
+                builder.diskCachePolicy(CachePolicy.DISABLED)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
+            }
+            builder.build()
         }
         AsyncImage(
             model = imageRequest,

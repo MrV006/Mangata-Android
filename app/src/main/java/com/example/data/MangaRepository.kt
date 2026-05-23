@@ -20,6 +20,14 @@ class MangaRepository(private val mangaDao: MangaDao) {
         }
     }
 
+    suspend fun insertBookmark(bookmark: Bookmark) {
+        mangaDao.insertBookmark(bookmark)
+    }
+
+    suspend fun insertReadHistory(history: ReadHistory) {
+        mangaDao.insertReadHistory(history)
+    }
+
     fun getHistoryForManga(mangaId: Int): Flow<ReadHistory?> = mangaDao.getHistoryForManga(mangaId)
 
     suspend fun saveReadHistory(mangaId: Int, chapter: Int, progress: Float) {

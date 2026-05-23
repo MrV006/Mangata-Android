@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -54,6 +55,7 @@ fun MangaReaderView(
     var zoomLevelText by remember { mutableStateOf("100%") }
     var showControlUi by remember { mutableStateOf(true) }
     var brightnessSetting by remember { mutableStateOf(1.0f) }
+    var isLowBandwidthCompressionEnabled by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val downloadedChaptersMap by viewModel.downloadedChapters.collectAsState()
@@ -127,7 +129,8 @@ fun MangaReaderView(
                             contentScale = ContentScale.FillWidth,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .wrapContentHeight()
+                                .wrapContentHeight(),
+                            compressionActive = isLowBandwidthCompressionEnabled
                         )
                         Spacer(modifier = Modifier.height(1.dp))
                     }
@@ -168,7 +171,8 @@ fun MangaReaderView(
                             isDownloaded = isDownloaded,
                             contentDescription = "صفحه ${page + 1} از مانهوا ${manga.titleFa}",
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            compressionActive = isLowBandwidthCompressionEnabled
                         )
                     }
                 }
@@ -339,7 +343,60 @@ fun MangaReaderView(
                     Icon(Icons.Default.DarkMode, contentDescription = null, tint = Color.White)
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Manga Image Compression for Low Connection
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF1D2024).copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Switch(
+                            checked = isLowBandwidthCompressionEnabled,
+                            onCheckedChange = { isLowBandwidthCompressionEnabled = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFF00C6FF),
+                                checkedTrackColor = Color(0xFF00C6FF).copy(alpha = 0.3f),
+                                uncheckedThumbColor = Color.Gray,
+                                uncheckedTrackColor = Color.DarkGray
+                            ),
+                            modifier = Modifier.scale(0.82f).testTag("low_bandwidth_switch")
+                        )
+                        Text(
+                            text = if (isLowBandwidthCompressionEnabled) "انتقال فشرده (3x) فعال است" else "فشرده‌سازی غیرفعال",
+                            color = if (isLowBandwidthCompressionEnabled) Color(0xFF00C6FF) else Color.Gray,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "بهینه‌سازی شبکه (اینترنت ضعیف)",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Speed,
+                            contentDescription = null,
+                            tint = if (isLowBandwidthCompressionEnabled) Color(0xFF00C6FF) else Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Chapter navigation row + format conversion switch
                 Row(
@@ -349,7 +406,7 @@ fun MangaReaderView(
                 ) {
                     // FORMAT SWITCH (Webtoon vertical scroll vs classic horizontal swipe)
                     Button(
-                        onClick = { onChapterChanged(if (isVerticalMode) 1 else 0) }, // Use parent toggle handler safely
+                        onClick = { viewModel.toggleReaderDirection() },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF23262B)),
                         shape = RoundedCornerShape(12.dp)
                     ) {

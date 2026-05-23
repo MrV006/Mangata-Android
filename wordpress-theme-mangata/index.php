@@ -20,7 +20,7 @@
             $status = get_post_meta($id, '_manga_status', true) ?: 'در حال انتشار';
             $chapters_count = get_post_meta($id, '_manga_chapters_count', true) ?: '150';
             $is_premium = get_post_meta($id, '_manga_is_premium', true);
-            $description = get_post_meta($id, '_manga_description', true) ?: get_the_excerpt() ?: 'خلاصه داستان برای این اثر ثبت نشده است.';
+            $description = get_post_meta($id, '_manga_description', true) ?: get_the_content() ?: get_the_excerpt() ?: 'خلاصه داستان برای این اثر ثبت نشده است.';
             
             $cover_url = get_the_post_thumbnail_url($id, 'medium');
             if (empty($cover_url)) {
@@ -35,6 +35,9 @@
                 $banner_url = 'https://picsum.photos/id/1025/1200/600';
             }
 
+            // Custom serialized pages
+            $pages_raw = get_post_meta($id, '_manga_pages_json', true) ?: '["https://picsum.photos/id/1015/800/1200", "https://picsum.photos/id/1016/800/1200"]';
+
             $mangas[] = [
                 'id' => $id,
                 'title_fa' => $title_fa,
@@ -46,10 +49,26 @@
                 'is_premium' => $is_premium,
                 'cover_url' => $cover_url,
                 'banner_url' => $banner_url,
-                'description' => $description
+                'description' => $description,
+                'pages_json' => $pages_raw
             ];
         }
         wp_reset_postdata();
+    }
+
+    // Load user cloud bookmarks & reading history
+    $user_id = get_current_user_id();
+    $bookmarks_raw = get_user_meta($user_id, 'mangata_bookmarks_json', true) ?: '[]';
+    $user_bookmarks = json_decode($bookmarks_raw, true) ?: array();
+    $bookmarked_manga_ids = array_column($user_bookmarks, 'mangaId');
+
+    $history_raw = get_user_meta($user_id, 'mangata_read_history_json', true) ?: '[]';
+    $user_history = json_decode($history_raw, true) ?: array();
+    $history_map = array();
+    foreach ($user_history as $h) {
+        if (isset($h['mangaId'])) {
+            $history_map[$h['mangaId']] = $h;
+        }
     }
 ?>
 
@@ -256,12 +275,97 @@
             </form>
         </div>
 
+        <!-- 🔖 Cloud Sync Bookmarks & Reading History Dashboard -->
+        <h2 class="section-head" id="user-sync-dashboard"><i class="fa-solid fa-cloud-arrow-up" style="color: #69F0AE; margin-left: 8px;"></i>پیشخوان همگام‌سازی ابری مانهواهای شما <span style="font-size: 11px; background-color: #69F0AE; color: #101216; padding: 2px 8px; border-radius: 4px; margin-right: 10px; font-weight: bold;"><i class="fa-solid fa-circle-check"></i> سنکرون زنده با دیتابیس</span></h2>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 40px;">
+            <!-- Bookmarks Column -->
+            <div style="background-color: #16191E; border: 1.5px solid #2D3139; border-radius: 16px; padding: 20px;">
+                <h3 style="color: #ffffff; font-size: 14px; font-weight: bold; border-bottom: 1px solid #2D3139; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between;">
+                    <span><i class="fa-solid fa-bookmark" style="color: #ffd700; margin-left: 6px;"></i>نشان‌شده‌های ابری شما</span>
+                    <span style="font-size: 11px; color: #A8C7FA;"><?php echo count($bookmarked_manga_ids); ?> اثر</span>
+                </h3>
+                
+                <div style="display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; padding-left: 5px;">
+                    <?php 
+                    $has_bookmarks = false;
+                    foreach ($mangas as $m) {
+                        if (in_array($m['id'], $bookmarked_manga_ids)) {
+                            $has_bookmarks = true;
+                            ?>
+                            <div class="bookmark-item-row" style="display: flex; align-items: center; justify-content: space-between; background-color: #1E2229; border: 1px solid #2D3139; padding: 10px; border-radius: 10px; cursor: pointer; transition: background-color 0.2s;" onclick="openMangaModal(<?php echo esc_attr(json_encode($m, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)); ?>)">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <img src="<?php echo esc_url($m['cover_url']); ?>" style="width: 40px; height: 55px; object-fit: cover; border-radius: 6px; border: 1px solid #2D3139;">
+                                    <div>
+                                        <h4 style="color:#ffffff; font-size: 13px; font-weight: bold; margin: 0;"><?php echo esc_html($m['title_fa']); ?></h4>
+                                        <span style="color: #9AA0A6; font-size: 10px;"><?php echo esc_html($m['type']); ?> • <?php echo esc_html($m['rating']); ?> ★</span>
+                                    </div>
+                                </div>
+                                <form action="<?php echo esc_url( home_url('/') ); ?>" method="POST" style="margin: 0;" onclick="event.stopPropagation();">
+                                    <input type="hidden" name="mangata_web_action" value="web_toggle_bookmark">
+                                    <input type="hidden" name="manga_id" value="<?php echo $m['id']; ?>">
+                                    <button type="submit" style="background: none; border: none; color: #ff5252; cursor: pointer; font-size: 13px;" title="حذف از نشان‌شده‌ها"><i class="fa-solid fa-trash-can"></i></button>
+                                </form>
+                            </div>
+                            <?php
+                        }
+                    }
+                    if (!$has_bookmarks) : ?>
+                        <div style="text-align: center; color: #5F6368; font-size: 12px; padding: 30px 0;">
+                            <i class="fa-solid fa-bookmark" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
+                            <span>لیست نشان‌شده‌های شما روی سرور خالی است.</span>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- History Column -->
+            <div style="background-color: #16191E; border: 1.5px solid #2D3139; border-radius: 16px; padding: 20px;">
+                <h3 style="color: #ffffff; font-size: 14px; font-weight: bold; border-bottom: 1px solid #2D3139; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between;">
+                    <span><i class="fa-solid fa-clock-rotate-left" style="color: #00C6FF; margin-left: 6px;"></i>تاریخچه مطالعه ابری</span>
+                    <span style="font-size: 11px; color: #A8C7FA;"><?php echo count($user_history); ?> عنوان</span>
+                </h3>
+                
+                <div style="display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; padding-left: 5px;">
+                    <?php 
+                    $has_history = false;
+                    foreach ($mangas as $m) {
+                        if (isset($history_map[$m['id']])) {
+                            $has_history = true;
+                            $h = $history_map[$m['id']];
+                            ?>
+                            <div class="bookmark-item-row" style="display: flex; align-items: center; justify-content: space-between; background-color: #1E2229; border: 1px solid #2D3139; padding: 10px; border-radius: 10px; cursor: pointer; transition: background-color 0.2s;" onclick="openMangaModal(<?php echo esc_attr(json_encode($m, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)); ?>)">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <img src="<?php echo esc_url($m['cover_url']); ?>" style="width: 40px; height: 55px; object-fit: cover; border-radius: 6px; border: 1px solid #2D3139;">
+                                    <div>
+                                        <h4 style="color:#ffffff; font-size: 13px; font-weight: bold; margin: 0;"><?php echo esc_html($m['title_fa']); ?></h4>
+                                        <span style="color: #00ff66; font-size: 10px; font-weight: bold;">آخرین مطالعه: چپتر <?php echo esc_html($h['currentChapter']); ?></span>
+                                        <div style="width: 100px; height: 4px; background-color: #2D3139; border-radius: 2px; margin-top: 4px; overflow: hidden;">
+                                            <div style="width: <?php echo esc_attr($h['scrollPercent']); ?>%; height: 100%; background: linear-gradient(90deg, #00C6FF, #0072FF);"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <span style="font-size: 10px; color: #9AA0A6;"><?php echo esc_html(round($h['scrollPercent'])); ?>% خوانده شده</span>
+                            </div>
+                            <?php
+                        }
+                    }
+                    if (!$has_history) : ?>
+                        <div style="text-align: center; color: #5F6368; font-size: 12px; padding: 30px 0;">
+                            <i class="fa-solid fa-clock-rotate-left" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
+                            <span>هنوز مانهوایی را مطالعه نکرده‌اید.</span>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
         <h2 class="section-head" id="catalog-header">کاتالوگ آثار بروز شده مانگاتا (دیتابیس متمرکز)</h2>
         <div class="manga-grid">
             <?php if ( !empty($mangas) ) : ?>
                 <?php foreach ( $mangas as $manga ) : ?>
-                    <!-- Dynamic Manga Card -->
-                    <article class="manga-card" onclick="alert('عنوان: <?php echo esc_attr($manga['title_fa']); ?>\nآی‌دی اثر: <?php echo $manga['id']; ?>\n\nاین اثر با موفقیت بر روی دیتابیس وب‌سایت ثبت شده و بلافاصله در اپلیکیشن اندروید شما قابل مطالعه آنلاین و دانلود آفلاین است!')">
+                    <!-- Dynamic Manga Card with Advanced Inline Modal Webtoon Reader -->
+                    <article class="manga-card" onclick="openMangaModal(<?php echo esc_attr(json_encode($manga, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)); ?>)">
                         <div class="manga-cover-wrapper">
                             <img src="<?php echo esc_url($manga['cover_url']); ?>" alt="<?php echo esc_attr($manga['title_fa']); ?>">
                             <span class="status-badge" style="<?php echo ($manga['status'] === 'پایان یافته') ? 'background-color: rgba(60, 10, 10, 0.85); color: #ff5252; border-color: #cc0033;' : ''; ?>"><?php echo esc_html($manga['status']); ?></span>
@@ -359,8 +463,257 @@
                         <p style="font-size: 10px; color:#C3C7CF; margin-top:5px;">پروژه: خانه شیرین، برج خدا</p>
                     </div>
                 </div>
+        </div>
+
+        <!-- 👁️ Advanced Interactive Webtoon Reader & Detail modal Sync Engine -->
+        <div id="mangata-manga-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(6, 8, 12, 0.9); z-index: 1100; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; backdrop-filter: blur(10px);">
+            <div style="background-color: #16191E; border: 1.5px solid #2D3139; width: 100%; max-width: 950px; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; max-height: 90vh; animation: zoomIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+                
+                <!-- Modal Header / Banner Background -->
+                <div id="modal-banner" style="background-size: cover; background-position: center; height: 160px; position: relative; display: flex; align-items: flex-end; padding: 20px;">
+                    <div style="position: absolute; top:0; left:0; width:100%; height:100%; background: linear-gradient(to bottom, rgba(15,17,21,0.2) 10%, #16191E 100%);"></div>
+                    <button onclick="closeMangaModal()" style="position: absolute; top: 15px; left: 15px; background-color: rgba(18,20,25,0.8); border: 1px solid #2D3139; color: #ffffff; border-radius: 50%; width: 36px; height: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; transition: all 0.2s; border: none;"><i class="fa-solid fa-xmark"></i></button>
+                    
+                    <div style="position: relative; z-index: 10; display: flex; align-items: flex-end; gap: 20px; width: 100%;">
+                        <img id="modal-cover" style="width: 90px; height: 130px; border-radius: 8px; border: 2px solid #2D3139; object-fit: cover; box-shadow: 0 4px 15px rgba(0,0,0,0.4); margin-bottom: -40px;" src="">
+                        <div>
+                            <span id="modal-type" class="type-tag" style="margin-bottom: 5px;"></span>
+                            <h2 id="modal-title-fa" style="color: #ffffff; font-size: 20px; font-weight: 900; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.8);"></h2>
+                            <h3 id="modal-title-en" style="color: #9AA0A6; font-size: 13px; font-weight: bold; margin: 5px 0 0 0; direction: ltr; text-align: right;"></h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal Content (Scrollable) -->
+                <div style="padding: 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 20px; margin-top: 30px;">
+                    <!-- Row 1: Quick Specs & Meta info + Cloud Buttons -->
+                    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 15px; background-color: #1E2229; border: 1px solid #2D3139; padding: 15px; border-radius: 12px;">
+                        <div style="display: flex; gap: 15px; font-size: 12px; color: #BDC1C6;">
+                            <span><i class="fa-solid fa-star" style="color: #ffd700; margin-left: 4px;"></i><strong id="modal-rating"></strong></span>
+                            <span>وضعیت: <strong id="modal-status" style="color: #00ff66;"></strong></span>
+                            <span>فصول: <strong id="modal-chapters"></strong></span>
+                        </div>
+
+                        <div style="display: flex; gap: 10px;">
+                            <!-- Bookmark Toggle Form -->
+                            <form id="modal-bookmark-form" action="<?php echo esc_url( home_url('/') ); ?>" method="POST" style="margin: 0;">
+                                <input type="hidden" name="mangata_web_action" value="web_toggle_bookmark">
+                                <input type="hidden" name="manga_id" id="modal-bookmark-manga-id" value="">
+                                <button type="submit" id="modal-bookmark-btn" style="background: linear-gradient(135deg, #ffd700, #ffa500); color: #101216; border: none; font-weight: bold; font-size: 12px; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: all 0.2s;"><i class="fa-solid fa-bookmark"></i> نشان کردن اثر</button>
+                            </form>
+                            
+                            <button onclick="toggleWebReader()" id="modal-read-toggle-btn" style="background: linear-gradient(135deg, #00C6FF, #0072FF); color: #ffffff; border: none; font-weight: bold; font-size: 12px; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: all 0.2s;"><i class="fa-solid fa-book-open"></i> شروع تماشای آنلاین (وب‌تون‌خوان)</button>
+                        </div>
+                    </div>
+
+                    <!-- Synopsis Column -->
+                    <div>
+                        <h4 style="color:#ffffff; font-size: 13px; font-weight: bold; margin-bottom: 8px;"><i class="fa-solid fa-align-right" style="color: #00ff66; margin-left:6px;"></i>خلاصه داستان مانهوا</h4>
+                        <p id="modal-description" style="color: #BDC1C6; font-size: 13px; line-height: 1.8; margin: 0; text-align: justify;"></p>
+                    </div>
+
+                    <!-- Spec Metadata list -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; font-size: 12px;">
+                        <div style="background-color: #1E2229; border: 1px solid #2D3139; padding: 10px 15px; border-radius: 8px;">
+                            <span style="color:#888888;">نویسنده / طراح اثر:</span>
+                            <div id="modal-author" style="color:#ffffff; font-weight:bold; margin-top:3px;"></div>
+                        </div>
+                        <div style="background-color: #1E2229; border: 1px solid #2D3139; padding: 10px 15px; border-radius: 8px;">
+                            <span style="color:#888888;">ژانرهای مانهوا:</span>
+                            <div id="modal-genres" style="color:#ffffff; font-weight:bold; margin-top:3px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- 📖 EXPANDABLE HIGH-TECH WEBTOON READER AREA -->
+                    <div id="web-webtoon-reader" style="display: none; border: 1.5px solid #0072FF; border-radius: 16px; overflow: hidden; background-color: #06080C; margin-top: 15px;">
+                        <!-- Reader Control Bar -->
+                        <div style="background-color: #1E2229; padding: 12px 20px; border-bottom: 1.5px solid #2D3139; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <label style="color:#ffffff; font-size:12px; font-weight:bold;">انتخاب چپتر:</label>
+                                <select id="reader-chapter-dropdown" onchange="changeReaderChapter()" style="background-color: #101216; border: 1px solid #2D3139; color:#ffffff; font-size:12px; padding: 5px 10px; border-radius: 6px; font-weight: bold; width: auto; height: auto;">
+                                    <!-- Will be loaded dynamically -->
+                                </select>
+                            </div>
+
+                            <!-- Image Quality Compression Switcher (3x Web Reader Acceleration exactly like Android!) -->
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label style="color: #ffd700; font-size:11px; font-weight:bold; cursor:pointer; display: flex; align-items: center; gap: 6px; user-select: none;">
+                                    <input type="checkbox" id="reader-compression-toggle" onchange="toggleWebtoonCompression()" style="width: 15px; height: 15px; cursor: pointer; margin: 0;"> بهینه‌سازی شبکه (اینترنت ضعیف) ۳ برابر کاهش حجم
+                                </label>
+                            </div>
+
+                            <!-- Progress Save Form -->
+                            <form id="reader-progress-form" action="<?php echo esc_url( home_url('/') ); ?>" method="POST" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                                <input type="hidden" name="mangata_web_action" value="web_save_progress">
+                                <input type="hidden" name="manga_id" id="progress-manga-id" value="">
+                                <input type="hidden" name="current_chapter" id="progress-chapter" value="1">
+                                <input type="hidden" name="scroll_percent" id="progress-scroll-percent" value="100.0">
+                                <button type="submit" style="background: linear-gradient(135deg, #00FF66, #009933); color:#101216; border: none; font-weight: bold; font-size: 11px; padding: 8px 14px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; border: none;"><i class="fa-solid fa-circle-check"></i> ثبت و همگام‌سازی پیشرفت مطالعه</button>
+                            </form>
+                        </div>
+
+                        <!-- Webtoon Scrolling Canvas -->
+                        <div id="webtoon-scrolling-canvas" onscroll="trackWebReaderScroll()" style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: 5px; background-color:#06080C; padding: 10px 0; width: 100%;">
+                            <!-- Reading pages loaded dynamically -->
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
+
+        <script>
+        var currentMangaObj = null;
+        var bookmarkedIds = <?php echo json_encode($bookmarked_manga_ids); ?>;
+        var readHistoryMap = <?php echo json_encode($history_map); ?>;
+
+        function openMangaModal(manga) {
+            currentMangaObj = manga;
+            document.getElementById('modal-bookmark-manga-id').value = manga.id;
+            document.getElementById('progress-manga-id').value = manga.id;
+            
+            document.getElementById('modal-banner').style.backgroundImage = "url('" + manga.banner_url + "')";
+            document.getElementById('modal-cover').src = manga.cover_url;
+            document.getElementById('modal-type').innerText = manga.type;
+            document.getElementById('modal-title-fa').innerText = manga.title_fa;
+            document.getElementById('modal-title-en').innerText = manga.title_en;
+            document.getElementById('modal-rating').innerText = manga.rating + ' ★';
+            document.getElementById('modal-status').innerText = manga.status;
+            document.getElementById('modal-chapters').innerText = manga.chapters_count + ' فصل';
+            document.getElementById('modal-description').innerText = manga.description;
+            document.getElementById('modal-author').innerText = manga.author;
+            document.getElementById('modal-genres').innerText = manga.genres;
+
+            // Configure Bookmark Button Label/Color based on current server state
+            var isBookmarked = bookmarkedIds.indexOf(manga.id) !== -1;
+            var btn = document.getElementById('modal-bookmark-btn');
+            if (isBookmarked) {
+                btn.innerHTML = '<i class="fa-solid fa-bookmark-slash"></i> حذف از نشان‌شده‌ها';
+                btn.style.background = "linear-gradient(135deg, #ff5252, #cc0033)";
+                btn.style.color = "#ffffff";
+            } else {
+                btn.innerHTML = '<i class="fa-solid fa-bookmark"></i> نشان کردن اثر';
+                btn.style.background = "linear-gradient(135deg, #ffd700, #ffa500)";
+                btn.style.color = "#101216";
+            }
+
+            // Hide reader by default on open
+            document.getElementById('web-webtoon-reader').style.display = 'none';
+            document.getElementById('modal-read-toggle-btn').innerHTML = '<i class="fa-solid fa-book-open"></i> شروع تماشای آنلاین (وب‌تون‌خوان)';
+            
+            // Show modal
+            document.getElementById('mangata-manga-modal').style.display = 'flex';
+        }
+
+        function closeMangaModal() {
+            document.getElementById('mangata-manga-modal').style.display = 'none';
+        }
+
+        // Toggle Webtoon scrolling view inside modal
+        function toggleWebReader() {
+            var reader = document.getElementById('web-webtoon-reader');
+            var btn = document.getElementById('modal-read-toggle-btn');
+            if (reader.style.display === 'none') {
+                reader.style.display = 'block';
+                btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> بستن وب‌تون‌خوان';
+                
+                // Build Chapter Dropdown
+                var dropdown = document.getElementById('reader-chapter-dropdown');
+                dropdown.innerHTML = '';
+                var total = currentMangaObj.chapters_count;
+                for (var i = 1; i <= total; i++) {
+                    var opt = document.createElement('option');
+                    opt.value = i;
+                    opt.innerText = 'چپتر ' + i;
+                    dropdown.appendChild(opt);
+                }
+                
+                // Track & set default to last read chapter if exists, otherwise 1
+                var lastReadChapter = 1;
+                if (readHistoryMap && readHistoryMap[currentMangaObj.id]) {
+                    lastReadChapter = parseInt(readHistoryMap[currentMangaObj.id].currentChapter) || 1;
+                }
+                dropdown.value = lastReadChapter;
+                document.getElementById('progress-chapter').value = lastReadChapter;
+                
+                loadWebtoonPages();
+            } else {
+                reader.style.display = 'none';
+                btn.innerHTML = '<i class="fa-solid fa-book-open"></i> شروع تماشای آنلاین (وب‌تون‌خوان)';
+            }
+        }
+
+        function changeReaderChapter() {
+            var dropdown = document.getElementById('reader-chapter-dropdown');
+            document.getElementById('progress-chapter').value = dropdown.value;
+            loadWebtoonPages();
+        }
+
+        // Load Webtoon images dynamically and support optimization exactly like Android!
+        function loadWebtoonPages() {
+            var canvas = document.getElementById('webtoon-scrolling-canvas');
+            canvas.innerHTML = '';
+            
+            var pages = [];
+            try {
+                pages = JSON.parse(currentMangaObj.pages_json);
+            } catch(err) {
+                pages = ["https://picsum.photos/id/1015/800/1200", "https://picsum.photos/id/1016/800/1200"];
+            }
+
+            var isCompressed = document.getElementById('reader-compression-toggle').checked;
+
+            pages.forEach(function(url, index) {
+                var img_src = url;
+                
+                // Image Optimization Compression Logic bound to Unsplash/Picsum exactly like on android client!
+                if (isCompressed) {
+                    if (img_src.indexOf('unsplash.com') !== -1) {
+                        // Inject small width (480px), quality (40) and webp compression params
+                        var cleanUrl = img_src.split('?')[0];
+                        img_src = cleanUrl + "?w=480&q=40&fm=webp";
+                    } else if (img_src.indexOf('picsum.photos') !== -1) {
+                        // Standard picsum resolution rewrite
+                        var parts = img_src.split('/');
+                        if (parts.length >= 5) {
+                            parts[parts.length - 2] = '480';
+                            parts[parts.length - 1] = '720';
+                            img_src = parts.join('/');
+                        }
+                    }
+                }
+
+                var img = document.createElement('img');
+                img.src = img_src;
+                img.style.width = '100%';
+                img.style.maxWidth = '600px';
+                img.style.height = 'auto';
+                img.style.display = 'block';
+                img.style.border = '1px solid #16191E';
+                img.alt = 'صفحه مانهوا شماره ' + (index + 1);
+                canvas.appendChild(img);
+            });
+
+            // Reset scroll position and track
+            canvas.scrollTop = 0;
+            document.getElementById('progress-scroll-percent').value = "0.0";
+        }
+
+        function toggleWebtoonCompression() {
+            loadWebtoonPages();
+        }
+
+        // Track scroll position to update reading history percentages
+        function trackWebReaderScroll() {
+            var canvas = document.getElementById('webtoon-scrolling-canvas');
+            var maxScroll = canvas.scrollHeight - canvas.clientHeight;
+            if (maxScroll > 0) {
+                var percent = (canvas.scrollTop / maxScroll) * 100;
+                // Prevent decimal creep
+                percent = Math.min(100.0, Math.max(0.0, percent));
+                document.getElementById('progress-scroll-percent').value = percent.toFixed(1);
+            }
+        }
+        </script>
     </div>
 
 <?php else : ?>

@@ -203,6 +203,30 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     init {
+        // Reactive collection to sync settings to internal variables
+        viewModelScope.launch {
+            systemSettings.collect { settings ->
+                val list = try {
+                    settings.featuredMangaIdsJson.split(",")
+                        .mapNotNull { it.trim().toIntOrNull() }
+                } catch (e: Exception) {
+                    listOf(1, 2, 3)
+                }
+                _featuredMangaIds.value = list.ifEmpty { listOf(1, 2, 3) }
+
+                val map = try {
+                    settings.startsFromZeroMangaIdsJson.split(",")
+                        .mapNotNull { it.trim().toIntOrNull() }
+                        .associateWith { true }
+                } catch (e: Exception) {
+                    emptyMap<Int, Boolean>()
+                }
+                _mangaStartsFromZero.value = map
+
+                _serverVersionCode.value = settings.requiredVersion
+            }
+        }
+
         // Initialize setup and seeds
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
@@ -230,6 +254,9 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
                     val userAcc = database.mangaDao().getUserAccountByIdOneShot(loggedInId)
                     if (userAcc != null) {
                         syncUserBalanceWithWordPress(userAcc)
+                        if (userAcc.role == "SUPER_ADMIN") {
+                            fetchRemoteAdminData()
+                        }
                     }
                 }
             }
@@ -328,6 +355,9 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleBookmark(id: Int, isFav: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.toggleBookmark(id, isFav)
+            currentUserAccount.value?.let { user ->
+                syncUserBalanceWithWordPress(user)
+            }
         }
     }
 
@@ -364,6 +394,9 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     fun saveReadingProgress(mangaId: Int, chapter: Int, progress: Float) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.saveReadHistory(mangaId, chapter, progress)
+            currentUserAccount.value?.let { user ->
+                syncUserBalanceWithWordPress(user)
+            }
         }
     }
 
@@ -504,12 +537,28 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 val localPurchasesJson = jsonAdapter.toJson(purchasesMap)
 
+                // Serialize bookmarks
+                val localBookmarks = repository.allBookmarks.first()
+                val bookmarksAdapter = moshi.adapter<List<com.example.data.Bookmark>>(
+                    com.squareup.moshi.Types.newParameterizedType(List::class.java, com.example.data.Bookmark::class.java)
+                )
+                val localBookmarksJson = bookmarksAdapter.toJson(localBookmarks)
+
+                // Serialize read history
+                val localReadHistory = repository.readHistory.first()
+                val readHistoryAdapter = moshi.adapter<List<com.example.data.ReadHistory>>(
+                    com.squareup.moshi.Types.newParameterizedType(List::class.java, com.example.data.ReadHistory::class.java)
+                )
+                val localReadHistoryJson = readHistoryAdapter.toJson(localReadHistory)
+
                 val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
                 val req = com.example.network.SyncRequest(
                     username = user.username,
                     walletRial = user.walletRial,
                     walletGiftChapters = user.walletGiftChapters,
-                    purchasedChaptersJson = localPurchasesJson
+                    purchasedChaptersJson = localPurchasesJson,
+                    bookmarksJson = localBookmarksJson,
+                    readHistoryJson = localReadHistoryJson
                 )
                 val response = api.syncUserData(req)
                 if (response.error == null) {
@@ -531,8 +580,34 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
                                 mangaId = sp.mangaId,
                                 chapterNumber = sp.chapterNumber,
                                 purchaseTime = System.currentTimeMillis()
-                            )
+                              )
                         )
+                    }
+
+                    // Synchronize newly fetched bookmarks from WordPress
+                    val srvBookmarksJson = response.bookmarksJson
+                    if (!srvBookmarksJson.isNullOrEmpty()) {
+                        try {
+                            val srvBookmarks = bookmarksAdapter.fromJson(srvBookmarksJson) ?: emptyList()
+                            srvBookmarks.forEach { sb ->
+                                repository.insertBookmark(sb)
+                            }
+                        } catch (ex: Exception) {
+                            Log.e(LOG_TAG, "Failed to parse synchronized bookmarks: ${ex.message}")
+                        }
+                    }
+
+                    // Synchronize newly fetched read history from WordPress
+                    val srvReadHistoryJson = response.readHistoryJson
+                    if (!srvReadHistoryJson.isNullOrEmpty()) {
+                        try {
+                            val srvReadHistory = readHistoryAdapter.fromJson(srvReadHistoryJson) ?: emptyList()
+                            srvReadHistory.forEach { srh ->
+                                repository.insertReadHistory(srh)
+                            }
+                        } catch (ex: Exception) {
+                            Log.e(LOG_TAG, "Failed to parse synchronized read history: ${ex.message}")
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -590,8 +665,32 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
                                 )
                             )
                         }
+
+                        // Restore synchronized bookmarks
+                        val srvBookmarksJson = response.bookmarksJson
+                        if (!srvBookmarksJson.isNullOrEmpty()) {
+                            val bookmarksAdapter = moshi.adapter<List<com.example.data.Bookmark>>(
+                                com.squareup.moshi.Types.newParameterizedType(List::class.java, com.example.data.Bookmark::class.java)
+                            )
+                            val srvBookmarks = bookmarksAdapter.fromJson(srvBookmarksJson) ?: emptyList()
+                            srvBookmarks.forEach { sb ->
+                                repository.insertBookmark(sb)
+                            }
+                        }
+
+                        // Restore synchronized read history
+                        val srvReadHistoryJson = response.readHistoryJson
+                        if (!srvReadHistoryJson.isNullOrEmpty()) {
+                            val readHistoryAdapter = moshi.adapter<List<com.example.data.ReadHistory>>(
+                                com.squareup.moshi.Types.newParameterizedType(List::class.java, com.example.data.ReadHistory::class.java)
+                            )
+                            val srvReadHistory = readHistoryAdapter.fromJson(srvReadHistoryJson) ?: emptyList()
+                            srvReadHistory.forEach { srh ->
+                                repository.insertReadHistory(srh)
+                            }
+                        }
                     } catch (e: Exception) {
-                        Log.e(LOG_TAG, "Moshi error restoring purchased chapters: ${e.message}")
+                        Log.e(LOG_TAG, "Moshi error restoring user sync datasets: ${e.message}")
                     }
 
                     sharedPrefs.edit().putInt("logged_in_user_id", matched.id).apply()
@@ -837,47 +936,154 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
             val user = accounts.find { it.id == userId } ?: return@launch
             val updatedUser = user.copy(role = "SUPER_ADMIN", subRole = "مدیر کل")
             repository.insertUserAccount(updatedUser)
+            try {
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                api.updateAdminUser(com.example.network.UpdateUserRequest(
+                    id = userId,
+                    role = "SUPER_ADMIN",
+                    subRole = "مدیر کل"
+                ))
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "Failed to update super admin promotion remote: ${e.message}")
+            }
         }
     }
 
     fun updateUserAccount(user: UserAccount) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.insertUserAccount(user)
+            try {
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                api.updateAdminUser(com.example.network.UpdateUserRequest(
+                    id = user.id,
+                    role = user.role,
+                    subRole = user.subRole,
+                    walletRial = user.walletRial,
+                    walletGiftChapters = user.walletGiftChapters,
+                    customRewardRate = user.customRewardRate
+                ))
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "Failed to sync user update remote: ${e.message}")
+            }
         }
     }
 
     fun updateSystemSettings(settings: SystemSettingsEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.insertSystemSettings(settings)
+            try {
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                api.updateAdminSettings(com.example.network.AdminSettingsRequest(
+                    baseChapterPrice = settings.baseChapterPrice,
+                    discountPercent50 = settings.discountPercent50,
+                    discountPercent100 = settings.discountPercent100,
+                    defaultStaffRewardChapters = settings.defaultStaffRewardChapters,
+                    minChaptersForStoryToken = settings.minChaptersForStoryToken,
+                    storyTokensAwarded = settings.storyTokensAwarded,
+                    maxVideoStoryDurationSeconds = settings.maxVideoStoryDurationSeconds,
+                    shareCleanerPct = settings.shareCleanerPct,
+                    shareEditorPct = settings.shareEditorPct,
+                    shareTranslatorPct = settings.shareTranslatorPct,
+                    sharePlatformPct = settings.sharePlatformPct,
+                    isTranslatorTestUploaded = settings.isTranslatorTestUploaded,
+                    isCleanerTestUploaded = settings.isCleanerTestUploaded,
+                    isTypistTestUploaded = settings.isTypistTestUploaded,
+                    requiredVersion = settings.requiredVersion,
+                    featuredMangaIdsJson = settings.featuredMangaIdsJson,
+                    startsFromZeroMangaIdsJson = settings.startsFromZeroMangaIdsJson
+                ))
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "Failed to sync settings remote: ${e.message}")
+            }
+        }
+    }
+
+    fun fetchRemoteAdminData() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                // 1. Fetch settings
+                try {
+                    val settings = api.getAdminSettings()
+                    repository.insertSystemSettings(settings)
+                    
+                    // Sync in-memory StateFlow states from WP response
+                    isTranslatorTestUploaded.value = settings.isTranslatorTestUploaded
+                    isCleanerTestUploaded.value = settings.isCleanerTestUploaded
+                    isTypistTestUploaded.value = settings.isTypistTestUploaded
+                    _serverVersionCode.value = settings.requiredVersion
+                    
+                    // Save into SharedPreferences as offline fallback
+                    sharedPrefs.edit()
+                        .putBoolean("test_uploaded_translator", settings.isTranslatorTestUploaded)
+                        .putBoolean("test_uploaded_cleaner", settings.isCleanerTestUploaded)
+                        .putBoolean("test_uploaded_typist", settings.isTypistTestUploaded)
+                        .apply()
+                } catch (e: Exception) { Log.e(LOG_TAG, "error fetching settings: ${e.message}") }
+
+                // 2. Fetch users
+                try {
+                    val users = api.getAdminUsers()
+                    users.forEach { u -> repository.insertUserAccount(u) }
+                } catch (e: Exception) { Log.e(LOG_TAG, "error fetching users: ${e.message}") }
+
+                // 3. Fetch recruitments
+                try {
+                    val recruitments = api.getAdminRecruitments()
+                    recruitments.forEach { r -> repository.insertRecruitment(r) }
+                } catch (e: Exception) { Log.e(LOG_TAG, "error fetching recruitments: ${e.message}") }
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "Failed fetchRemoteAdminData: ${e.message}")
+            }
         }
     }
 
     fun setTranslatorTestUploaded(uploaded: Boolean) {
         sharedPrefs.edit().putBoolean("test_uploaded_translator", uploaded).apply()
         isTranslatorTestUploaded.value = uploaded
+        val currentS = systemSettings.value
+        updateSystemSettings(currentS.copy(isTranslatorTestUploaded = uploaded))
     }
 
     fun setCleanerTestUploaded(uploaded: Boolean) {
         sharedPrefs.edit().putBoolean("test_uploaded_cleaner", uploaded).apply()
         isCleanerTestUploaded.value = uploaded
+        val currentS = systemSettings.value
+        updateSystemSettings(currentS.copy(isCleanerTestUploaded = uploaded))
     }
 
     fun setTypistTestUploaded(uploaded: Boolean) {
         sharedPrefs.edit().putBoolean("test_uploaded_typist", uploaded).apply()
         isTypistTestUploaded.value = uploaded
+        val currentS = systemSettings.value
+        updateSystemSettings(currentS.copy(isTypistTestUploaded = uploaded))
     }
 
     fun payWalletTopup(amount: Long) {
         val user = currentUserAccount.value ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            repository.insertUserAccount(user.copy(walletRial = user.walletRial + amount))
+            val updatedUser = user.copy(walletRial = user.walletRial + amount)
+            repository.insertUserAccount(updatedUser)
+            try {
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                api.updateAdminUser(com.example.network.UpdateUserRequest(id = user.id, walletRial = updatedUser.walletRial))
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "Failed to topup remote: ${e.message}")
+            }
         }
     }
 
     fun awardGiftChapters(userId: Int, count: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             userAccounts.value.find { it.id == userId }?.let { targetUser ->
-                repository.insertUserAccount(targetUser.copy(walletGiftChapters = targetUser.walletGiftChapters + count))
+                val updatedUser = targetUser.copy(walletGiftChapters = targetUser.walletGiftChapters + count)
+                repository.insertUserAccount(updatedUser)
+                try {
+                    val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                    api.updateAdminUser(com.example.network.UpdateUserRequest(id = userId, walletGiftChapters = updatedUser.walletGiftChapters))
+                } catch (e: Exception) {
+                    Log.e(LOG_TAG, "Failed to award gift chapters remote: ${e.message}")
+                }
             }
         }
     }
@@ -1208,6 +1414,19 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
                 dateSubmitted = "امروز"
             )
             repository.insertRecruitment(app)
+            try {
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                val responseApp = api.addAdminRecruitment(com.example.network.AddRecruitmentRequest(
+                    fullName = fullName,
+                    messengerId = messengerId,
+                    specialty = specialty,
+                    testFileName = "فایل_خام_تست_${specialty}.zip",
+                    uploadedWorkName = "پاسخ_تست_کاربر_${fullName}.zip"
+                ))
+                repository.insertRecruitment(responseApp)
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "Failed to apply remote: ${e.message}")
+            }
             withContext(Dispatchers.Main) { onSuccess() }
         }
     }
@@ -1216,6 +1435,12 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val newStatus = if (approve) "APPROVED" else "REJECTED"
             repository.insertRecruitment(app.copy(status = newStatus))
+            try {
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                api.updateAdminRecruitment(com.example.network.UpdateRecruitmentRequest(id = app.id, status = newStatus))
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "Failed to review recruitment remote: ${e.message}")
+            }
 
             if (approve) {
                 val guest = userAccounts.value.find { it.id == 6 }
@@ -1227,6 +1452,16 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
                         storyTokens = 2
                     )
                     repository.insertUserAccount(upgraded)
+                    try {
+                        val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                        api.updateAdminUser(com.example.network.UpdateUserRequest(
+                            id = guest.id,
+                            role = "STAFF",
+                            subRole = app.specialty
+                        ))
+                    } catch (e: Exception) {
+                        Log.e(LOG_TAG, "Failed upgrading user meta: ${e.message}")
+                    }
                 }
             }
         }
@@ -1234,6 +1469,8 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateServerVersionCode(code: Int) {
         _serverVersionCode.value = code
+        val currentS = systemSettings.value
+        updateSystemSettings(currentS.copy(requiredVersion = code))
     }
 
     fun toggleFeaturedManga(mangaId: Int) {
@@ -1244,12 +1481,22 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
             currentList.add(mangaId)
         }
         _featuredMangaIds.value = currentList
+        val currentS = systemSettings.value
+        val newListString = currentList.joinToString(",")
+        updateSystemSettings(currentS.copy(featuredMangaIdsJson = newListString))
     }
 
     fun setMangaStartsFromZero(mangaId: Int, startsFromZero: Boolean) {
         val currentMap = _mangaStartsFromZero.value.toMutableMap()
-        currentMap[mangaId] = startsFromZero
+        if (startsFromZero) {
+            currentMap[mangaId] = true
+        } else {
+            currentMap.remove(mangaId)
+        }
         _mangaStartsFromZero.value = currentMap
+        val currentS = systemSettings.value
+        val newListString = currentMap.keys.joinToString(",")
+        updateSystemSettings(currentS.copy(startsFromZeroMangaIdsJson = newListString))
     }
 
     fun uploadWorkflowProgress(mangaId: Int, fileType: String, fileName: String) {
@@ -1332,18 +1579,66 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
                 bannerUrl = bannerUrl
             )
             repository.updateManga(updatedManga)
+            try {
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                api.saveManga(com.example.network.AdminMangaSaveRequest(
+                    id = mangaId,
+                    titleFa = titleFa,
+                    titleEn = titleEn,
+                    descriptionFa = descriptionFa,
+                    coverUrl = coverUrl,
+                    bannerUrl = bannerUrl,
+                    type = manga.type,
+                    status = manga.status,
+                    genres = manga.genres,
+                    author = manga.author,
+                    translatorTeam = manga.translatorTeam,
+                    chaptersCount = manga.chaptersCount,
+                    isPremium = manga.isPremium,
+                    pagesJson = manga.pagesJson
+                ))
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "Failed saving manga remote detailed edit: ${e.message}")
+            }
         }
     }
 
     fun updateFullManga(manga: com.example.data.MangaEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.updateManga(manga)
+            try {
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                api.saveManga(com.example.network.AdminMangaSaveRequest(
+                    id = manga.id,
+                    titleFa = manga.titleFa,
+                    titleEn = manga.titleEn,
+                    descriptionFa = manga.descriptionFa,
+                    coverUrl = manga.coverUrl,
+                    bannerUrl = manga.bannerUrl,
+                    type = manga.type,
+                    status = manga.status,
+                    genres = manga.genres,
+                    author = manga.author,
+                    translatorTeam = manga.translatorTeam,
+                    chaptersCount = manga.chaptersCount,
+                    isPremium = manga.isPremium,
+                    pagesJson = manga.pagesJson
+                ))
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "Failed saving full manga remote update: ${e.message}")
+            }
         }
     }
 
     fun deleteManga(mangaId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.deleteManga(mangaId)
+            try {
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                api.deleteManga(com.example.network.AdminMangaDeleteRequest(id = mangaId))
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "Failed to delete manga remote: ${e.message}")
+            }
         }
     }
 
@@ -1362,6 +1657,7 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val list = repository.allMangas.first()
             val newId = (list.maxOfOrNull { it.id } ?: 0) + 1
+            val defaultPages = "[\"https://images.unsplash.com/photo-1541963463532-d68292c34b19\",\"https://images.unsplash.com/photo-1508921912186-1d1a45ebb3c1\",\"https://images.unsplash.com/photo-1517841905240-472988babdf9\"]"
             val newManga = com.example.data.MangaEntity(
                 id = newId,
                 titleFa = titleFa,
@@ -1377,10 +1673,37 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
                 status = "در حال انتشار",
                 translatorTeam = "مانگاتا سنتر",
                 reviewsJson = "[]",
-                pagesJson = "[\"https://images.unsplash.com/photo-1541963463532-d68292c34b19\",\"https://images.unsplash.com/photo-1508921912186-1d1a45ebb3c1\",\"https://images.unsplash.com/photo-1517841905240-472988babdf9\"]",
+                pagesJson = defaultPages,
                 isPremium = true
             )
             repository.updateManga(newManga)
+            try {
+                val api = com.example.network.RetrofitClient.getClient(siteDomain.value)
+                val response = api.saveManga(com.example.network.AdminMangaSaveRequest(
+                    id = null, // Send null to let WordPress insert it as a new post
+                    titleFa = titleFa,
+                    titleEn = titleEn,
+                    descriptionFa = descriptionFa,
+                    coverUrl = coverUrl,
+                    bannerUrl = bannerUrl,
+                    type = type,
+                    status = "در حال انتشار",
+                    genres = genres,
+                    author = author,
+                    translatorTeam = "مانگاتا سنتر",
+                    chaptersCount = chaptersCount,
+                    isPremium = true,
+                    pagesJson = defaultPages
+                ))
+                if (response.success && response.id != null) {
+                    // Update our local entity with the actual WordPress assigned Post ID!
+                    repository.deleteManga(newId) // Remove temp initial id
+                    repository.updateManga(newManga.copy(id = response.id))
+                    Log.d(LOG_TAG, "Manga saved successfully to WordPress with real assigned Post ID: ${response.id}")
+                }
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "Failed adding manga remote save: ${e.message}")
+            }
         }
     }
 
