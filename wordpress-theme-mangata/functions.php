@@ -18,7 +18,7 @@ function mangata_setup_tables() {
     global $wpdb;
 
     // Check if we've already set up the db to avoid running heavy checks on every request if possible
-    if (get_option('mangata_db_created') === '1.0.0') {
+    if (get_option('mangata_db_created_v2') === '1.0.0') {
         return;
     }
 
@@ -29,9 +29,9 @@ function mangata_setup_tables() {
     $sql_mangas = "CREATE TABLE $table_mangas (
         id bigint(20) NOT NULL AUTO_INCREMENT,
         title varchar(255) NOT NULL,
-        description text DEFAULT '' NOT NULL,
+        description text NOT NULL,
         cover_image varchar(255) DEFAULT '' NOT NULL,
-        created_at datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+        created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
         PRIMARY KEY (id)
     ) $charset_collate;";
     mangata_ensure_table_exists($table_mangas, $sql_mangas);
@@ -46,7 +46,7 @@ function mangata_setup_tables() {
         images_json longtext NOT NULL,
         zip_url varchar(255) DEFAULT '' NOT NULL,
         uploaded_by bigint(20) NOT NULL,
-        created_at datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+        created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
         PRIMARY KEY (id)
     ) $charset_collate;";
     mangata_ensure_table_exists($table_chapters, $sql_chapters);
@@ -60,7 +60,7 @@ function mangata_setup_tables() {
         file_url varchar(255) NOT NULL,
         status varchar(50) DEFAULT 'Pending' NOT NULL,
         score int(11) DEFAULT NULL,
-        created_at datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+        created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
         PRIMARY KEY (id)
     ) $charset_collate;";
     mangata_ensure_table_exists($table_exams, $sql_exams);
@@ -77,7 +77,7 @@ function mangata_setup_tables() {
     mangata_ensure_table_exists($table_staff, $sql_staff);
 
     // Save DB status option
-    update_option('mangata_db_created', '1.0.0');
+    update_option('mangata_db_created_v2', '1.0.0');
 }
 add_action('after_switch_theme', 'mangata_setup_tables');
 
@@ -169,8 +169,11 @@ add_action('rest_api_init', function () {
 // AUTH - Real WordPress Login Integration
 function mangata_api_login($request) {
     $params = $request->get_json_params();
-    $username = sanitize_text_field($params['username']);
-    $password = sanitize_text_field($params['password']);
+    if (empty($params)) {
+        $params = $request->get_params();
+    }
+    $username = isset($params['username']) ? sanitize_text_field($params['username']) : '';
+    $password = isset($params['password']) ? sanitize_text_field($params['password']) : '';
 
     if (empty($username) || empty($password)) {
         return mangata_api_error('شناسه کاربری و رمز عبور الزامی است.');
@@ -199,10 +202,13 @@ function mangata_api_login($request) {
 // AUTH - Real WordPress Register Integration
 function mangata_api_register($request) {
     $params = $request->get_json_params();
-    $username = sanitize_text_field($params['username']);
-    $email = sanitize_email($params['email']);
-    $password = sanitize_text_field($params['password']);
-    $role = sanitize_text_field($params['role']); // subscriber, administrator, staff_translator etc.
+    if (empty($params)) {
+        $params = $request->get_params();
+    }
+    $username = isset($params['username']) ? sanitize_text_field($params['username']) : '';
+    $email = isset($params['email']) ? sanitize_email($params['email']) : '';
+    $password = isset($params['password']) ? sanitize_text_field($params['password']) : '';
+    $role = isset($params['role']) ? sanitize_text_field($params['role']) : 'subscriber'; // subscriber, administrator, staff_translator etc.
 
     if (empty($username) || empty($email) || empty($password)) {
         return mangata_api_error('پر کردن تمامی فیلدها الزامی است.');
@@ -253,9 +259,12 @@ function mangata_api_get_manhwas($request) {
 function mangata_api_create_manhwa($request) {
     global $wpdb;
     $params = $request->get_json_params();
-    $title = sanitize_text_field($params['title']);
-    $desc = sanitize_textarea_field($params['description']);
-    $cover = sanitize_text_field($params['cover_image']);
+    if (empty($params)) {
+        $params = $request->get_params();
+    }
+    $title = isset($params['title']) ? sanitize_text_field($params['title']) : '';
+    $desc = isset($params['description']) ? sanitize_textarea_field($params['description']) : '';
+    $cover = isset($params['cover_image']) ? sanitize_text_field($params['cover_image']) : '';
 
     if (empty($title)) {
         return mangata_api_error('عنوان مانهوا الزامی است.');
@@ -491,10 +500,13 @@ function mangata_api_get_exams($request) {
 function mangata_api_grade_exam($request) {
     global $wpdb;
     $params = $request->get_json_params();
-    $admin_id = intval($params['admin_id']);
-    $exam_id = intval($params['exam_id']);
-    $status = sanitize_text_field($params['status']); // Accepted, Rejected, Pending
-    $score = intval($params['score']);
+    if (empty($params)) {
+        $params = $request->get_params();
+    }
+    $admin_id = isset($params['admin_id']) ? intval($params['admin_id']) : 0;
+    $exam_id = isset($params['exam_id']) ? intval($params['exam_id']) : 0;
+    $status = isset($params['status']) ? sanitize_text_field($params['status']) : 'Pending'; // Accepted, Rejected, Pending
+    $score = isset($params['score']) ? intval($params['score']) : 0;
 
     $user_meta = get_userdata($admin_id);
     $is_admin = $user_meta && in_array('administrator', $user_meta->roles);
@@ -521,10 +533,13 @@ function mangata_api_grade_exam($request) {
 function mangata_api_assign_staff($request) {
     global $wpdb;
     $params = $request->get_json_params();
-    $admin_id = intval($params['admin_id']);
-    $user_id = intval($params['user_id']); // target staff user
-    $manga_id = intval($params['manga_id']);
-    $role = sanitize_text_field($params['role']); // Translator, Redrawer, Cleaner, TS
+    if (empty($params)) {
+        $params = $request->get_params();
+    }
+    $admin_id = isset($params['admin_id']) ? intval($params['admin_id']) : 0;
+    $user_id = isset($params['user_id']) ? intval($params['user_id']) : 0; // target staff user
+    $manga_id = isset($params['manga_id']) ? intval($params['manga_id']) : 0;
+    $role = isset($params['role']) ? sanitize_text_field($params['role']) : ''; // Translator, Redrawer, Cleaner, TS
 
     $user_meta = get_userdata($admin_id);
     $is_admin = $user_meta && in_array('administrator', $user_meta->roles);
