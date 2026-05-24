@@ -1,39 +1,32 @@
 package com.example.network
 
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
-import retrofit2.converter.moshi.MoshiConverterFactory
+import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
-    private var retrofit: Retrofit? = null
+    private const val BASE_URL = "https://mr-v.ir/wp-json/mangata/v1/"
 
-    fun getClient(baseUrl: String): MangaApiService {
-        // Ensure trailing slash for Retrofit base URL
-        val formattedUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
+    private val loggingInterceptor = HttpLoggingInterceptor().apply {
+        level = HttpLoggingInterceptor.Level.BODY
+    }
 
-        val moshi = Moshi.Builder()
-            .add(KotlinJsonAdapterFactory())
-            .build()
+    private val okHttpClient = OkHttpClient.Builder()
+        .addInterceptor(loggingInterceptor)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(120, TimeUnit.SECONDS) // generous timeout for uploading ZIPs
+        .build()
 
-        val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
-        }
+    private val retrofit: Retrofit = Retrofit.Builder()
+        .baseUrl(BASE_URL)
+        .client(okHttpClient)
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
 
-        val client = OkHttpClient.Builder()
-            .addInterceptor(logging)
-            .build()
-
-        if (retrofit == null || retrofit?.baseUrl().toString() != formattedUrl) {
-            retrofit = Retrofit.Builder()
-                .baseUrl(formattedUrl)
-                .client(client)
-                .addConverterFactory(MoshiConverterFactory.create(moshi))
-                .build()
-        }
-
-        return retrofit!!.create(MangaApiService::class.java)
+    val apiService: MangaApiService by lazy {
+        retrofit.create(MangaApiService::class.java)
     }
 }

@@ -1,174 +1,64 @@
 package com.example.network
 
-import retrofit2.http.Body
-import retrofit2.http.GET
-import retrofit2.http.POST
-
-data class ServerChapterPurchase(
-    val mangaId: Int,
-    val chapterNumber: Int
-)
-
-data class LoginRequest(
-    val username: String,
-    val password: String
-)
-
-data class RegisterRequest(
-    val username: String,
-    val displayName: String,
-    val password: String
-)
-
-data class SyncRequest(
-    val username: String,
-    val walletRial: Long,
-    val walletGiftChapters: Int,
-    val purchasedChaptersJson: String,
-    val bookmarksJson: String? = null,
-    val readHistoryJson: String? = null
-)
-
-data class PurchaseRequest(
-    val userId: Int,
-    val mangaId: Int,
-    val chapterNumber: Int,
-    val price: Long,
-    val isGiftUse: Boolean
-)
-
-data class UserResponse(
-    val id: Int,
-    val username: String,
-    val displayName: String,
-    val role: String,
-    val subRole: String,
-    val walletRial: Long,
-    val walletGiftChapters: Int,
-    val purchasedChaptersJson: String,
-    val bookmarksJson: String? = null,
-    val readHistoryJson: String? = null,
-    val error: String? = null
-)
-
-data class PurchaseResponse(
-    val success: Boolean,
-    val walletRial: Long,
-    val walletGiftChapters: Int,
-    val purchasedChaptersJson: String,
-    val errorMessage: String? = null
-)
-
-data class AdminSettingsRequest(
-    val baseChapterPrice: Int,
-    val discountPercent50: Int,
-    val discountPercent100: Int,
-    val defaultStaffRewardChapters: Int,
-    val minChaptersForStoryToken: Int,
-    val storyTokensAwarded: Int,
-    val maxVideoStoryDurationSeconds: Int,
-    val shareCleanerPct: Int,
-    val shareEditorPct: Int,
-    val shareTranslatorPct: Int,
-    val sharePlatformPct: Int,
-    val isTranslatorTestUploaded: Boolean,
-    val isCleanerTestUploaded: Boolean,
-    val isTypistTestUploaded: Boolean,
-    val requiredVersion: Int,
-    val featuredMangaIdsJson: String,
-    val startsFromZeroMangaIdsJson: String
-)
-
-data class UpdateUserRequest(
-    val id: Int,
-    val role: String? = null,
-    val subRole: String? = null,
-    val walletRial: Long? = null,
-    val walletGiftChapters: Int? = null,
-    val customRewardRate: Int? = null
-)
-
-data class UpdateRecruitmentRequest(
-    val id: Int,
-    val status: String
-)
-
-data class AddRecruitmentRequest(
-    val fullName: String,
-    val messengerId: String,
-    val specialty: String,
-    val testFileName: String,
-    val uploadedWorkName: String
-)
-
-data class AdminMangaSaveRequest(
-    val id: Int? = null,
-    val titleFa: String,
-    val titleEn: String,
-    val descriptionFa: String,
-    val coverUrl: String,
-    val bannerUrl: String,
-    val type: String = "مانهوا",
-    val status: String = "در حال انتشار",
-    val genres: String = "فانتزی, اکشن",
-    val author: String = "نامشخص",
-    val translatorTeam: String = "تیم مانگاتا",
-    val chaptersCount: Int = 10,
-    val isPremium: Boolean,
-    val pagesJson: String
-)
-
-data class AdminMangaDeleteRequest(
-    val id: Int
-)
-
-data class GenericAdminResponse(
-    val success: Boolean,
-    val id: Int? = null,
-    val error: String? = null
-)
+import com.example.data.*
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
+import retrofit2.http.*
 
 interface MangaApiService {
-    // This connects to the custom WordPress REST API endpoint defined in our Mangata theme
-    @GET("wp-json/mangata/v1/mangas")
-    suspend fun getMangas(): List<com.example.data.MangaEntity>
 
-    @POST("wp-json/mangata/v1/login")
-    suspend fun loginUser(@Body req: LoginRequest): UserResponse
+    @POST("auth/login")
+    suspend fun login(
+        @Body request: LoginRequest
+    ): ApiResponse<UserData>
 
-    @POST("wp-json/mangata/v1/register")
-    suspend fun registerUser(@Body req: RegisterRequest): UserResponse
+    @POST("auth/register")
+    suspend fun register(
+        @Body request: RegisterRequest
+    ): ApiResponse<UserData>
 
-    @POST("wp-json/mangata/v1/sync")
-    suspend fun syncUserData(@Body req: SyncRequest): UserResponse
+    @GET("manhwa/list")
+    suspend fun getManhwas(): ApiResponse<List<MangaItem>>
 
-    @POST("wp-json/mangata/v1/purchase")
-    suspend fun purchaseChapterOnServer(@Body req: PurchaseRequest): PurchaseResponse
+    @POST("manhwa/create")
+    suspend fun createManhwa(
+        @Body request: Map<String, String>
+    ): ApiResponse<Map<String, String>>
 
-    @GET("wp-json/mangata/v1/admin/get-settings")
-    suspend fun getAdminSettings(): com.example.data.SystemSettingsEntity
+    @GET("chapter/list")
+    suspend fun getChapters(
+        @Query("manga_id") mangaId: Int?
+    ): ApiResponse<List<ChapterItem>>
 
-    @POST("wp-json/mangata/v1/admin/update-settings")
-    suspend fun updateAdminSettings(@Body req: AdminSettingsRequest): com.example.data.SystemSettingsEntity
+    @Multipart
+    @POST("chapter/upload-zip")
+    suspend fun uploadChapterZip(
+        @Part zipFile: MultipartBody.Part,
+        @Part("manga_id") mangaId: RequestBody,
+        @Part("chapter_number") chapterNumber: RequestBody,
+        @Part("title") title: RequestBody,
+        @Part("user_id") userId: RequestBody
+    ): ApiResponse<Map<String, String>>
 
-    @GET("wp-json/mangata/v1/admin/get-users")
-    suspend fun getAdminUsers(): List<com.example.data.UserAccount>
+    @Multipart
+    @POST("exam/upload")
+    suspend fun uploadExamFile(
+        @Part examFile: MultipartBody.Part,
+        @Part("user_id") userId: RequestBody
+    ): ApiResponse<Map<String, String>>
 
-    @POST("wp-json/mangata/v1/admin/update-user")
-    suspend fun updateAdminUser(@Body req: UpdateUserRequest): GenericAdminResponse
+    @GET("exam/list")
+    suspend fun getExams(
+        @Query("user_id") userId: Int
+    ): ApiResponse<List<ExamItem>>
 
-    @GET("wp-json/mangata/v1/admin/get-recruitments")
-    suspend fun getAdminRecruitments(): List<com.example.data.RecruitmentApplication>
+    @POST("exam/grade")
+    suspend fun gradeExam(
+        @Body request: GradeExamRequest
+    ): ApiResponse<Map<String, String>>
 
-    @POST("wp-json/mangata/v1/admin/add-recruitment")
-    suspend fun addAdminRecruitment(@Body req: AddRecruitmentRequest): com.example.data.RecruitmentApplication
-
-    @POST("wp-json/mangata/v1/admin/update-recruitment")
-    suspend fun updateAdminRecruitment(@Body req: UpdateRecruitmentRequest): GenericAdminResponse
-
-    @POST("wp-json/mangata/v1/admin/save-manga")
-    suspend fun saveManga(@Body req: AdminMangaSaveRequest): GenericAdminResponse
-
-    @POST("wp-json/mangata/v1/admin/delete-manga")
-    suspend fun deleteManga(@Body req: AdminMangaDeleteRequest): GenericAdminResponse
+    @POST("staff/assign")
+    suspend fun assignStaff(
+        @Body request: StaffAssignmentRequest
+    ): ApiResponse<Map<String, String>>
 }

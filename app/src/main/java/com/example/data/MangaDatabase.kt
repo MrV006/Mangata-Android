@@ -6,21 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [
-        MangaEntity::class,
-        ReadHistory::class,
-        Bookmark::class,
-        TeamMember::class,
-        UserPurchase::class,
-        UserAccount::class,
-        SystemSettingsEntity::class,
-        RecruitmentApplication::class,
-        StoryEntity::class,
-        ChapterPurchaseRecord::class,
-        SupportTicket::class,
-        ChapterWork::class
-    ],
-    version = 3,
+    entities = [MangaEntity::class, ChapterEntity::class, CachedUserEntity::class],
+    version = 1,
     exportSchema = false
 )
 abstract class MangaDatabase : RoomDatabase() {
@@ -35,7 +22,7 @@ abstract class MangaDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     MangaDatabase::class.java,
-                    "mangata_database"
+                    "mangata_local_db"
                 )
                 .fallbackToDestructiveMigration()
                 .build()

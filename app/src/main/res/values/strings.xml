@@ -1,3 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">مانگاتا</string>
+    <string name="app_name">Mangata</string>
+    <string name="welcome_title">خوش آمدید به مانگاتا</string>
+    <string name="login_title">ورود به حساب کاربری</string>
+    <string name="register_title">ثبت نام حساب جدید</string>
+    <string name="username_label">نام کاربری</string>
+    <string name="password_label">رمز عبور</string>
+    <string name="email_label">پست الکترونیکی (ایمیل)</string>
+    <string name="role_label">نقش کاربر</string>
+    <string name="login_btn">ورود</string>
+    <string name="register_btn">ثبت نام</string>
+    <string name="exam_btn">آزمون‌های استخدامی تیم مترجمین</string>
+    <string name="upload_zip_btn">آلود مانهوا (فایل ZIP)</string>
+    <string name="reader_viewer_title">مانهوا ریدر</string>
 </resources>

@@ -2,22 +2,18 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+// Premium Slate Dark Palette
+val SlateDarkBackground = Color(0xFF121214)
+val DarkSurface = Color(0xFF1E1E22)
+val DarkSurfaceVariant = Color(0xFF26262B)
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val PrimaryAmethyst = Color(0xFFBB86FC)
+val SecondaryPink = Color(0xFFFF7597)
+val AccentViolet = Color(0xFF6200EE)
 
-// Elegant Dark Theme Palette
-val ElegantDarkBg = Color(0xFF0F1115)
-val ElegantDarkSurface = Color(0xFF1D2024)
-val ElegantDarkOutline = Color(0xFF2D3139)
-val ElegantDarkText = Color(0xFFE2E2E6)
-val ElegantAccentBlue = Color(0xFFA8C7FA)
-val ElegantAccentBlueDark = Color(0xFF003366)
-val ElegantAccentGreen = Color(0xFF59B259)
-val ElegantDarkBottomNav = Color(0xFF14171B)
-val ElegantDarkCardBg = Color(0xFF16191E)
+val TextWhite = Color(0xFFF0F0F2)
+val TextGray = Color(0xFF9E9EA8)
 
+val ColorSuccess = Color(0xFF4CAF50)
+val ColorError = Color(0xFFF44336)
+val ColorWarning = Color(0xFFFFC107)
