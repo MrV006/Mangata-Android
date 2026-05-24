@@ -1,4 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
 <?php
 /**
  * Mangata Theme Functions & REST API Backend Router
@@ -6,63 +5,79 @@
  */
 
 // 1. Establish custom database tables on theme activation
+if (!function_exists('mangata_ensure_table_exists')) {
+    function mangata_ensure_table_exists($table_name, $create_sql) {
+        global $wpdb;
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name)) !== $table_name) {
+            $wpdb->query($create_sql);
+        }
+    }
+}
+
 function mangata_setup_tables() {
     global $wpdb;
-    $charset_collate = $wpdb->get_charset_collate();
 
-    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    // Check if we've already set up the db to avoid running heavy checks on every request if possible
+    if (get_option('mangata_db_created') === '1.0.0') {
+        return;
+    }
+
+    $charset_collate = $wpdb->get_charset_collate();
 
     // Mangas Table
     $table_mangas = $wpdb->prefix . 'mangata_mangas';
-    $sql_mangas = "CREATE TABLE IF NOT EXISTS $table_mangas (
+    $sql_mangas = "CREATE TABLE $table_mangas (
         id bigint(20) NOT NULL AUTO_INCREMENT,
         title varchar(255) NOT NULL,
-        description text DEFAULT '',
-        cover_image varchar(255) DEFAULT '',
-        created_at datetime DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id)
+        description text DEFAULT '' NOT NULL,
+        cover_image varchar(255) DEFAULT '' NOT NULL,
+        created_at datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+        PRIMARY KEY (id)
     ) $charset_collate;";
-    dbDelta($sql_mangas);
+    mangata_ensure_table_exists($table_mangas, $sql_mangas);
 
     // Chapters Table
     $table_chapters = $wpdb->prefix . 'mangata_chapters';
-    $sql_chapters = "CREATE TABLE IF NOT EXISTS $table_chapters (
+    $sql_chapters = "CREATE TABLE $table_chapters (
         id bigint(20) NOT NULL AUTO_INCREMENT,
         manga_id bigint(20) NOT NULL,
         chapter_number decimal(10,2) NOT NULL,
-        title varchar(255) DEFAULT '',
-        images_json longtext,
-        zip_url varchar(255) DEFAULT '',
+        title varchar(255) DEFAULT '' NOT NULL,
+        images_json longtext NOT NULL,
+        zip_url varchar(255) DEFAULT '' NOT NULL,
         uploaded_by bigint(20) NOT NULL,
-        created_at datetime DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id)
+        created_at datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+        PRIMARY KEY (id)
     ) $charset_collate;";
-    dbDelta($sql_chapters);
+    mangata_ensure_table_exists($table_chapters, $sql_chapters);
 
     // Exams Table (Recruitment Exam files)
     $table_exams = $wpdb->prefix . 'mangata_exams';
-    $sql_exams = "CREATE TABLE IF NOT EXISTS $table_exams (
+    $sql_exams = "CREATE TABLE $table_exams (
         id bigint(20) NOT NULL AUTO_INCREMENT,
         user_id bigint(20) NOT NULL,
         file_name varchar(255) NOT NULL,
         file_url varchar(255) NOT NULL,
-        status varchar(50) DEFAULT 'Pending',
+        status varchar(50) DEFAULT 'Pending' NOT NULL,
         score int(11) DEFAULT NULL,
-        created_at datetime DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id)
+        created_at datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+        PRIMARY KEY (id)
     ) $charset_collate;";
-    dbDelta($sql_exams);
+    mangata_ensure_table_exists($table_exams, $sql_exams);
 
     // Staff Assignments Table
     $table_staff = $wpdb->prefix . 'mangata_staff';
-    $sql_staff = "CREATE TABLE IF NOT EXISTS $table_staff (
+    $sql_staff = "CREATE TABLE $table_staff (
         id bigint(20) NOT NULL AUTO_INCREMENT,
         user_id bigint(20) NOT NULL,
         manga_id bigint(20) NOT NULL,
         role varchar(100) NOT NULL,
-        PRIMARY KEY  (id)
+        PRIMARY KEY (id)
     ) $charset_collate;";
-    dbDelta($sql_staff);
+    mangata_ensure_table_exists($table_staff, $sql_staff);
+
+    // Save DB status option
+    update_option('mangata_db_created', '1.0.0');
 }
 add_action('after_switch_theme', 'mangata_setup_tables');
 
@@ -326,8 +341,14 @@ function mangata_api_upload_chapter_zip($request) {
     $extract_dir_path = $wp_upload_dir['basedir'] . "/mangata/extracts/{$manga_id}/{$chapter_num}/";
     $extract_dir_url = $wp_upload_dir['baseurl'] . "/mangata/extracts/{$manga_id}/{$chapter_num}/";
 
-    if (!file_exists($extract_dir_path)) {
-        mkdir($extract_dir_path, 0755, true);
+    if (!is_dir($extract_dir_path)) {
+        if (!@mkdir($extract_dir_path, 0755, true) && !is_dir($extract_dir_path)) {
+            return mangata_api_error('خطای دسترسی سرور: پوشه استخراج مانهوا قابل ایجاد نیست.');
+        }
+    }
+
+    if (!class_exists('ZipArchive')) {
+        return mangata_api_error('سیستم فاقد الحاقیه ZipArchive جهت استخراج چپتر است. لطفا php-zip را روی هاست فعال کنید.');
     }
 
     $zip = new ZipArchive();
@@ -336,8 +357,11 @@ function mangata_api_upload_chapter_zip($request) {
     if ($zip->open($file_path) === TRUE) {
         $zip->extractTo($extract_dir_path);
         
-        // Find extracted image files in natural order
-        $files = scandir($extract_dir_path);
+        // Find extracted image files in natural order safely
+        $files = @scandir($extract_dir_path);
+        if ($files === false) {
+            $files = array();
+        }
         // filter images
         $img_extensions = array('jpg', 'jpeg', 'png', 'webp', 'gif');
         foreach ($files as $file) {
@@ -347,8 +371,11 @@ function mangata_api_upload_chapter_zip($request) {
             }
         }
         $zip->close();
-        natcasesort($extracted_images); // naturally sort items (1.jpg, 2.jpg, 10.jpg)
-        $extracted_images = array_values($extracted_images);
+        
+        if (!empty($extracted_images)) {
+            natcasesort($extracted_images); // naturally sort items (1.jpg, 2.jpg, 10.jpg)
+            $extracted_images = array_values($extracted_images);
+        }
     } else {
         return mangata_api_error('فایل آپلودی یک فایل ZIP معتبر نیست یا استخراج آن با شکست مواجه شد.');
     }

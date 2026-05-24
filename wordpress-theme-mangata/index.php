@@ -52,6 +52,9 @@ if (isset($_POST['submit_exam'])) {
 
 // Fetch mangas from real db table
 $mangas = $wpdb->get_results("SELECT * FROM $table_mangas ORDER BY id DESC", ARRAY_A);
+if (!is_array($mangas)) {
+    $mangas = array();
+}
 ?>
 
 <div class="container">
@@ -179,6 +182,9 @@ $mangas = $wpdb->get_results("SELECT * FROM $table_mangas ORDER BY id DESC", ARR
             }
 
             $all_exams = $wpdb->get_results("SELECT e.*, u.user_login as username, u.user_email as email FROM $table_exams e JOIN {$wpdb->users} u ON e.user_id = u.ID ORDER BY e.id DESC", ARRAY_A);
+            if (!is_array($all_exams)) {
+                $all_exams = array();
+            }
             if (!empty($all_exams)): ?>
                 <table>
                     <thead>
