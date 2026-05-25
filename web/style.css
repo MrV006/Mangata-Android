@@ -1,0 +1,175 @@
+/*
+ * Standalone Mangata Portal System - Dark Material 3 Palette Stylesheet
+ */
+
+body {
+    background-color: #0c0a0f;
+    color: #e2dff0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    direction: rtl;
+    line-height: 1.6;
+}
+
+header {
+    background: rgba(18, 16, 22, 0.95);
+    border-bottom: 2px solid #7c4dff;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+}
+
+header h1 {
+    margin: 0;
+}
+
+header h1 a {
+    color: #bb86fc;
+    text-decoration: none;
+    font-size: 26px;
+    letter-spacing: 0.5px;
+}
+
+header nav {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+header nav a {
+    transition: color 0.2s ease;
+    font-size: 14px;
+}
+
+header nav a:hover {
+    color: #ff7597 !important;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 30px 20px;
+}
+
+.card {
+    background: #141218;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.card h2 {
+    color: #ff7597;
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-size: 20px;
+}
+
+.btn {
+    background: #6200ee;
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 8px;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    display: inline-block;
+    transition: background 0.2s, transform 0.1s;
+    text-align: center;
+}
+
+.btn:hover {
+    background: #7c4dff;
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn-sm {
+    padding: 8px 16px;
+    font-size: 12px;
+    border-radius: 6px;
+}
+
+input, select, textarea {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    background: #1e1b24;
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    box-sizing: border-box;
+    font-size: 14px;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: #bb86fc;
+    background: #25212d;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 13px;
+    background: #121016;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+table th, table td {
+    padding: 14px;
+    border: 1px solid rgba(255,255,255,0.04);
+    text-align: right;
+}
+
+table th {
+    background-color: #1a1622;
+    color: #ff7597;
+    font-weight: bold;
+}
+
+table tr:nth-child(even) {
+    background-color: rgba(255,255,255,0.01);
+}
+
+table tr:hover {
+    background-color: rgba(255,255,255,0.02);
+}
+
+.success-message {
+    background: #1b5e20;
+    border-right: 5px solid #4caf50;
+    color: #e8f5e9;
+    padding: 15px;
+    border-radius: 6px;
+    margin: 15px 0;
+    font-size: 14px;
+}
+
+.error-message {
+    background: #b71c1c;
+    border-right: 5px solid #f44336;
+    color: #ffebee;
+    padding: 15px;
+    border-radius: 6px;
+    margin: 15px 0;
+    font-size: 14px;
+}
+
+.font-bold {
+    font-weight: bold;
+}
