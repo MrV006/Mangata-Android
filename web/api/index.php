@@ -65,13 +65,18 @@ try {
                 api_send_error('مشخصات کاربری وارد شده صحیح نیست.', 401);
             }
 
+            // Generate session token (Ensure single-device restriction)
+            $token = bin2hex(random_bytes(16));
+            $stmt_update = $pdo->prepare("UPDATE mangata_users SET session_token = ? WHERE id = ?");
+            $stmt_update->execute([$token, $user['id']]);
+
             api_send_success([
                 'user_id' => (int)$user['id'],
                 'username' => $user['username'],
                 'email' => $user['email'],
                 'role' => $user['role'],
                 'display_name' => $user['username'],
-                'token' => bin2hex(random_bytes(16))
+                'token' => $token
             ]);
             break;
 
@@ -106,8 +111,11 @@ try {
                 $role = 'subscriber';
             }
 
-            $stmt = $pdo->prepare("INSERT INTO mangata_users (username, email, password_hash, role) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$username, $email, $password_hash, $role]);
+            // Generate session token
+            $token = bin2hex(random_bytes(16));
+
+            $stmt = $pdo->prepare("INSERT INTO mangata_users (username, email, password_hash, role, session_token) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$username, $email, $password_hash, $role, $token]);
             $user_id = $pdo->lastInsertId();
 
             api_send_success([
@@ -116,7 +124,29 @@ try {
                 'email' => $email,
                 'role' => $role,
                 'display_name' => $username,
-                'token' => bin2hex(random_bytes(16))
+                'token' => $token
+            ]);
+            break;
+
+        case 'auth/check-session':
+            $user_id = isset($params['user_id']) ? (int)$params['user_id'] : 0;
+            $token = trim($params['token'] ?? '');
+
+            if ($user_id <= 0 || empty($token)) {
+                api_send_error('پارامترهای معتبرسازی وارد نشده است.');
+            }
+
+            $stmt = $pdo->prepare("SELECT session_token, role FROM mangata_users WHERE id = ?");
+            $stmt->execute([$user_id]);
+            $row = $stmt->fetch();
+
+            if (!$row || $row['session_token'] !== $token) {
+                api_send_error('نشست کاربری شما پایان یافته است. احتمالاً با دیوایس دیگری وارد شده‌اید.', 401);
+            }
+
+            api_send_success([
+                'valid' => true,
+                'role' => $row['role']
             ]);
             break;
 

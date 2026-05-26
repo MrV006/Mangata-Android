@@ -76,3 +76,8 @@ data class StaffAssignmentRequest(
     @SerializedName("manga_id") val mangaId: Int,
     @SerializedName("role") val role: String
 )
+
+data class SessionValidResponse(
+    @SerializedName("valid") val valid: Boolean,
+    @SerializedName("role") val role: String
+)

@@ -18,9 +18,15 @@ if (isset($_POST['web_login'])) {
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password_hash'])) {
+            // Generate session token (Ensure single-device restriction)
+            $token = bin2hex(random_bytes(16));
+            $stmt_update = $pdo->prepare("UPDATE mangata_users SET session_token = ? WHERE id = ?");
+            $stmt_update->execute([$token, $user['id']]);
+
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['user_role'] = $user['role'];
+            $_SESSION['session_token'] = $token;
             $login_msg = '<div class="success-message">خوش آمدید، ' . htmlspecialchars($user['username']) . '! ورود موفقیت‌آمیز بود.</div>';
         } else {
             $login_msg = '<div class="error-message">نام کاربری یا رمز عبور اشتباه است.</div>';
@@ -342,32 +348,47 @@ $mangas = $stmt->fetchAll();
         </div>
 
         <!-- Auth Terminal or User panel -->
-        <div id="auth" class="card" style="border-top: 5px solid #03dac6; background: #1a1a1a;">
+        <div id="auth" class="card" style="border: 2px solid rgba(3,218,198,0.25); background: linear-gradient(145deg, rgba(20,18,24,0.85) 0%, rgba(13,10,18,0.95) 100%); backdrop-filter: blur(15px); box-shadow: 0 10px 40px rgba(3,218,198,0.12), inset 0 0 20px rgba(3,218,198,0.02); transition: all 0.3s ease;">
             <?php if (!is_logged_in()): ?>
-                <h2 style="color:#03dac6; margin-top:0;">🔐 ورود به پایگاه فرماندهی</h2>
-                <p style="color:#ccc; font-size:13px; margin-bottom:20px;">مخصوص مدیران کل و یا مترجمین جهت پیگیری وضعیت کارهای تیمی.</p>
+                <div style="text-align: center; margin-bottom: 22px;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; width: 54px; height: 54px; border-radius: 14px; background: rgba(3,218,198,0.1); margin-bottom: 12px; color: #03dac6; border: 1px solid rgba(3,218,198,0.2);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    </div>
+                    <h2 style="color:#03dac6; margin:0 0 4px 0; font-size:22px; font-weight:800; text-shadow:0 0 10px rgba(3,218,198,0.25);">ورود به پایگاه فرماندهی</h2>
+                    <p style="color:#aaa; font-size:12px; margin:0;">پورتال یکپارچه مدیریت آثار، تخصیص کادر و تصحیح آزمون‌ها</p>
+                </div>
                 
-                <form action="#auth" method="POST">
-                    <label style="font-size:13px; color:#03dac6; font-weight:bold;">شناسه کاربری یا ایمیل:</label>
-                    <input type="text" name="username" placeholder="username" required>
+                <form action="#auth" method="POST" style="display:flex; flex-direction:column; gap:14px;">
+                    <div>
+                        <label style="font-size:12px; color:#03dac6; font-weight:800; display:block; margin-bottom:6px;">شناسه کاربری یا آدرسه ایمیل:</label>
+                        <input type="text" name="username" placeholder="Username or email" required style="margin:0; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 14px; transition:all 0.3s;">
+                    </div>
 
-                    <label style="font-size:13px; color:#03dac6; font-weight:bold; display:block; margin-top:10px;">رمز عبور:</label>
-                    <input type="password" name="password" placeholder="••••••••" required>
+                    <div>
+                        <label style="font-size:12px; color:#03dac6; font-weight:800; display:block; margin-bottom:6px;">رمز عبور یکپارچه:</label>
+                        <input type="password" name="password" placeholder="••••••••" required style="margin:0; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 14px; transition:all 0.3s;">
+                    </div>
 
-                    <button type="submit" name="web_login" class="btn" style="width:100%; margin-top:15px; background:#03dac6; color:#000; font-weight:bold;">ورود امن به پنل کاربری</button>
+                    <button type="submit" name="web_login" class="btn" style="width:100%; padding:13px; margin-top:8px; border-radius:12px; background:linear-gradient(135deg, #03dac6, #018786); color:#000; font-weight:900; letter-spacing:0.2px; font-size:14px; box-shadow:0 4px 15px rgba(3,218,198,0.3); transition:all 0.3s;">ورود امن به پنل مرکزی</button>
                 </form>
-                <div style="margin-top: 15px; padding: 10px; background:#222; border-radius:4px; font-size:11px; text-align:center; color:#888;">
-                    اکانت مدیر پیش‌فرض جهت تست اولیه:<br>
-                    نام کاربری: <code style="color:#fff;">admin</code> | رمزعبور: <code style="color:#fff;">admin123</code>
+                <div style="margin-top:18px; padding:12px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px dashed rgba(255,255,255,0.06); font-size:11px; text-align:center; color:#777; line-height:1.6;">
+                    اکانت مدیر پیش‌فرض جهت ورود:<br>
+                    نام کاربری: <code style="color:#03dac6; font-weight:bold;">admin</code> | رمزعبور: <code style="color:#03dac6; font-weight:bold;">admin123</code>
                 </div>
             <?php else: ?>
-                <h2 style="color:#03dac6; margin-top:0;">👤 حساب من</h2>
-                <div style="background:#252525; padding:15px; border-radius:6px; border:1px solid #333;">
-                    <p style="margin:5px 0;">کاربر جاری: <strong style="color:#fff;"><?php echo htmlspecialchars($_SESSION['username']); ?></strong></p>
-                    <p style="margin:5px 0;">نقش دسترسی: <strong style="color:#03dac6;"><?php echo htmlspecialchars($_SESSION['user_role']); ?></strong></p>
+                <div style="text-align: center; margin-bottom: 18px;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; width: 54px; height: 54px; border-radius: 14px; background: rgba(3,218,198,0.1); margin-bottom: 12px; color: #03dac6;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </div>
+                    <h2 style="color:#03dac6; margin:0 0 4px 0; font-size: 20px; font-weight: bold;">👤 حساب من فعال است</h2>
+                    <p style="color:#888; font-size: 11px; margin:0;">شما با موفقیت به پایگاه داده متصل شدید</p>
                 </div>
-                <div style="margin-top:-5px; font-size: 11px; color:#888; text-align:center;" class="font-bold">
-                    [اتصال دوجانبه مستقیم برقرار است]
+                <div style="background: rgba(255,255,255,0.02); padding:16px; border-radius:12px; border:1px solid rgba(255,255,255,0.06); margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display:flex; justify-content:space-between; font-size: 13px;"><span style="color:#888;">کاربر جاری:</span><strong style="color:#fff;"><?php echo htmlspecialchars($_SESSION['username']); ?></strong></div>
+                    <div style="display:flex; justify-content:space-between; font-size: 13px;"><span style="color:#888;">نقش دسترسی:</span><strong style="color:#03dac6;"><?php echo htmlspecialchars($_SESSION['user_role'] === 'administrator' ? 'مدیریت کل' : 'مترجم/همکار'); ?></strong></div>
+                </div>
+                <div style="font-size: 10px; color:#03dac6; text-align:center; padding: 6px; border-radius: 6px; border: 1px solid rgba(3,218,198,0.1); background: rgba(3,218,198,0.05);" class="font-bold">
+                    ⚡ نشست فعال و کنترل دوجانبه مستقیم برقرار است
                 </div>
             <?php endif; ?>
         </div>

@@ -41,7 +41,27 @@ class MangaViewModel(application: Application) : AndroidViewModel(application) {
         // Load persist user session first
         viewModelScope.launch {
             _currentUser.value = repository.getCurrentUser()
+            checkActiveSession()
             fetchManhwas()
+        }
+    }
+
+    fun checkActiveSession() {
+        val user = _currentUser.value ?: return
+        val token = user.token ?: return
+        viewModelScope.launch {
+            val result = repository.checkSession(user.id, token)
+            if (result.isFailure) {
+                repository.logout()
+                _currentUser.value = null
+                _exams.value = emptyList()
+                _errorMessage.value = "نشست فعال شما منقضی یا از دیوایس دیگری وارد شده‌اید."
+            } else {
+                val dbRole = result.getOrNull()?.role
+                if (dbRole != null && dbRole != user.role) {
+                    _currentUser.value = user.copy(role = dbRole)
+                }
+            }
         }
     }
 
@@ -115,6 +135,18 @@ class MangaViewModel(application: Application) : AndroidViewModel(application) {
     // Manga & Chapter Actions
     fun fetchManhwas() {
         viewModelScope.launch {
+            _currentUser.value?.let { user ->
+                user.token?.let { token ->
+                    val checkResult = repository.checkSession(user.id, token)
+                    if (checkResult.isFailure) {
+                        repository.logout()
+                        _currentUser.value = null
+                        _exams.value = emptyList()
+                        _errorMessage.value = "نشست فعال شما منقضی یا از دیوایس دیگری وارد شده‌اید."
+                        return@launch
+                    }
+                }
+            }
             _isLoading.value = true
             val result = repository.getManhwas()
             _isLoading.value = false

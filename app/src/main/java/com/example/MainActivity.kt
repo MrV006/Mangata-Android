@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -92,6 +93,10 @@ class MainActivity : ComponentActivity() {
                             MangaReaderView(
                                 chapter = readerCap,
                                 mangaTitle = readerManga.title,
+                                chaptersList = chapters[readerManga.id] ?: emptyList(),
+                                onChapterChanged = { newChapter ->
+                                    selectedChapterForReader = newChapter
+                                },
                                 onCloseReader = {
                                     selectedChapterForReader = null
                                     selectedMangaForReader = null
@@ -146,7 +151,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// 1. WordPress Auth Composables
+// 1. Standalone Centralized Auth Screen
 @Composable
 fun AuthScreen(
     isLoading: Boolean,
@@ -155,18 +160,23 @@ fun AuthScreen(
 ) {
     var isSignUpTab by remember { mutableStateOf(false) }
 
-    // Forms
+    // Forms state
     var username by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var selectedRole by remember { mutableStateOf("subscriber") } // subscriber, author etc.
+    var isPasswordVisible by remember { mutableStateOf(false) }
+    var selectedRole by remember { mutableStateOf("subscriber") } // subscriber, contributor
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color(0xFF1F1A3A), Color(0xFF121214))
+                    colors = listOf(
+                        Color(0xFF0F0C1B), // Midnight Velvet
+                        Color(0xFF1E1435), // Royal Purple Dark
+                        Color(0xFF08070F)  // Absolute Black
+                    )
                 )
             ),
         contentAlignment = Alignment.Center
@@ -174,109 +184,280 @@ fun AuthScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
+                .padding(horizontal = 24.dp, vertical = 32.dp)
+                .widthIn(max = 420.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // Logo / Branding
-            Text(
-                text = "MANGATA • مانگاتا",
-                style = MaterialTheme.typography.displayLarge.copy(
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 2.sp,
-                    color = MaterialTheme.colorScheme.primary
+            // Header / App Logo Vibe
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(68.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                        .padding(12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Favorite,
+                        contentDescription = "Mangata Logo",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "MANGATA • مانگاتا",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 2.sp,
+                        color = Color.White
+                    )
                 )
-            )
 
-            Text(
-                text = "پایگاه مانهواهای اختصاصی و تیمی",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.secondary
-            )
+                Text(
+                    text = "پایگاه جامع، زنده و تیمی مانهواخوان",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
+            }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Tab toggler
+            // Tab Switcher with Sleek Pill Animation style
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(4.dp)
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(
-                    onClick = { isSignUpTab = false },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (!isSignUpTab) MaterialTheme.colorScheme.primary else Color.Transparent
-                    ),
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(6.dp)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (!isSignUpTab) MaterialTheme.colorScheme.primary else Color.Transparent)
+                        .clickable { isSignUpTab = false },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("ورود با وردپرس", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "ورود واقعی",
+                        color = if (!isSignUpTab) Color.Black else Color.White,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
 
-                Button(
-                    onClick = { isSignUpTab = true },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isSignUpTab) MaterialTheme.colorScheme.primary else Color.Transparent
-                    ),
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(6.dp)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isSignUpTab) MaterialTheme.colorScheme.primary else Color.Transparent)
+                        .clickable { isSignUpTab = true },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("ثبت نام جدید", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "ثبت‌نام جدید",
+                        color = if (isSignUpTab) Color.Black else Color.White,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
             }
 
+            // Form container glassmorphic card
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White.copy(alpha = 0.05f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Fields
+                    Text(
+                        text = if (isSignUpTab) "کارت عضویت مانهواخواهان" else "احراز هویت دیتابیس هوشمند",
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    // 1. Username
                     OutlinedTextField(
                         value = username,
                         onValueChange = { username = it },
-                        label = { Text("نام کاربری (حروف انگلیسی)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                        label = { Text("نام کاربری (انگلیسی)") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = "user icon",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
                     )
 
-                    if (isSignUpTab) {
-                        OutlinedTextField(
-                            value = email,
-                            onValueChange = { email = it },
-                            label = { Text("آدرس ایمیل") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
+                    // 2. Email (only on SignUp)
+                    AnimatedVisibility(visible = isSignUpTab) {
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            OutlinedTextField(
+                                value = email,
+                                onValueChange = { email = it },
+                                label = { Text("آدرس ایمیل") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Email,
+                                        contentDescription = "email icon",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                ),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
 
-                        // Role Option
-                        Text("علاقمند به عضویت در کادر:", style = MaterialTheme.typography.labelMedium, color = Color.LightGray)
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                RadioButton(selected = selectedRole == "subscriber", onClick = { selectedRole = "subscriber" })
-                                Text("مخاطب عادی", fontSize = 12.sp)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                RadioButton(selected = selectedRole == "contributor", onClick = { selectedRole = "contributor" })
-                                Text("مترجم/طراح", fontSize = 12.sp)
+                            Text(
+                                text = "علاقمند به فعالیت در کادر ترجمه؟",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.LightGray
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            if (selectedRole == "subscriber") MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            else Color.White.copy(alpha = 0.04f)
+                                        )
+                                        .clickable { selectedRole = "subscriber" }
+                                        .padding(10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = if (selectedRole == "subscriber") Icons.Default.CheckCircle else Icons.Default.FavoriteBorder,
+                                            contentDescription = "subscriber choice",
+                                            tint = if (selectedRole == "subscriber") MaterialTheme.colorScheme.primary else Color.Gray,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            text = "مخاطب عادی",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (selectedRole == "subscriber") Color.White else Color.Gray
+                                        )
+                                    }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1.1f)
+                                        .height(56.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            if (selectedRole == "contributor") MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            else Color.White.copy(alpha = 0.04f)
+                                        )
+                                        .clickable { selectedRole = "contributor" }
+                                        .padding(10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = if (selectedRole == "contributor") Icons.Default.CheckCircle else Icons.Default.Star,
+                                            contentDescription = "contributor choice",
+                                            tint = if (selectedRole == "contributor") MaterialTheme.colorScheme.primary else Color.Gray,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            text = "مترجم و طراح",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (selectedRole == "contributor") Color.White else Color.Gray
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
 
+                    // 3. Password
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
-                        label = { Text("رمز عبور دیتابیس سایت") },
-                        modifier = Modifier.fillMaxWidth(),
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true
+                        label = { Text("رمز عبور دیتابیس") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "lock icon",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                                Icon(
+                                    imageVector = if (isPasswordVisible) Icons.Default.Lock else Icons.Default.Lock,
+                                    contentDescription = "Peek password",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        visualTransformation = if (isPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     Button(
                         onClick = {
@@ -286,18 +467,27 @@ fun AuthScreen(
                                 onLoginSubmit(username, password)
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = Color.Black
                         ),
                         enabled = !isLoading
                     ) {
                         if (isLoading) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Color.Black,
+                                strokeWidth = 2.dp
+                            )
                         } else {
                             Text(
-                                text = if (isSignUpTab) "عضویت در پورتال مرکزی" else "ورود واقعی و همگام به سایت",
-                                fontWeight = FontWeight.Bold
+                                text = if (isSignUpTab) "عضویت در پورتال مرکزی" else "ورود یکپارچه به دنیای مانهوا",
+                                fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.bodyMedium
                             )
                         }
                     }

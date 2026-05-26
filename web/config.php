@@ -31,9 +31,17 @@ function mangata_init_database($pdo) {
         email varchar(100) NOT NULL UNIQUE,
         password_hash varchar(255) NOT NULL,
         role varchar(50) DEFAULT 'subscriber' NOT NULL,
+        session_token varchar(255) DEFAULT NULL,
         created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
         PRIMARY KEY (id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
+    // Add session_token column to mangata_users if not exists (for existing database migration)
+    try {
+        $pdo->exec("ALTER TABLE mangata_users ADD COLUMN session_token varchar(255) DEFAULT NULL;");
+    } catch (Exception $e) {
+        // Safe to ignore if already exists
+    }
 
     // 2. Mangas Table
     $pdo->exec("CREATE TABLE IF NOT EXISTS mangata_mangas (
@@ -111,7 +119,27 @@ function api_send_error($message, $code = 400) {
 
 // Session Helpers for Web Dashboard Login
 function is_logged_in() {
-    return isset($_SESSION['user_id']);
+    global $pdo;
+    if (!isset($_SESSION['user_id'])) {
+        return false;
+    }
+    if (isset($_SESSION['session_token'])) {
+        try {
+            $stmt = $pdo->prepare("SELECT session_token FROM mangata_users WHERE id = ?");
+            $stmt->execute([$_SESSION['user_id']]);
+            $db_token = $stmt->fetchColumn();
+            if ($db_token !== $_SESSION['session_token']) {
+                // Another device has logged in! Invalidate session.
+                unset($_SESSION['user_id']);
+                unset($_SESSION['user_role']);
+                unset($_SESSION['session_token']);
+                return false;
+            }
+        } catch (Exception $e) {
+            // Decouple network/db issues gracefully
+        }
+    }
+    return true;
 }
 
 function get_current_user_id() {

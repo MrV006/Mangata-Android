@@ -17,6 +17,24 @@ class MangaRepository(private val db: MangaDatabase) {
         return dao.getCurrentUserProfile()
     }
 
+    suspend fun checkSession(userId: Int, token: String): Result<SessionValidResponse> {
+        return try {
+            val response = api.checkSession(userId, token)
+            if (response.status == "success" && response.data != null) {
+                // If role changed on DB, we can update local database here too
+                val cached = dao.getCurrentUserProfile()
+                if (cached != null && cached.role != response.data.role) {
+                    dao.saveUserProfile(cached.copy(role = response.data.role))
+                }
+                Result.success(response.data)
+            } else {
+                Result.failure(Exception(response.message ?: "نشست معتبر یافت نشد."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun logout() {
         dao.clearUserProfile()
     }

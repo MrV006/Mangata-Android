@@ -17,6 +17,12 @@ interface MangaApiService {
         @Body request: RegisterRequest
     ): ApiResponse<UserData>
 
+    @GET("auth/check-session")
+    suspend fun checkSession(
+        @Query("user_id") userId: Int,
+        @Query("token") token: String
+    ): ApiResponse<SessionValidResponse>
+
     @GET("manhwa/list")
     suspend fun getManhwas(): ApiResponse<List<MangaItem>>
 
