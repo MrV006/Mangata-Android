@@ -478,6 +478,176 @@ try {
             ]);
             break;
 
+        // ================= ADVANCED ADMIN TOOLS =================
+        case 'manhwa/delete':
+            $admin_id = isset($params['admin_id']) ? (int)$params['admin_id'] : 0;
+            $manga_id = isset($params['manga_id']) ? (int)$params['manga_id'] : 0;
+
+            // Check admin
+            $stmt = $pdo->prepare("SELECT role FROM mangata_users WHERE id = ?");
+            $stmt->execute([$admin_id]);
+            $admin_role = $stmt->fetchColumn();
+
+            if ($admin_role !== 'administrator') {
+                api_send_error('فقط ادمین اجازه حذف کارهای مانهوا را دارد.', 403);
+            }
+
+            if ($manga_id <= 0) {
+                api_send_error('شناسه مانهوا نامعتبر است.');
+            }
+
+            $pdo->beginTransaction();
+            // Delete chapters associated
+            $stmt = $pdo->prepare("DELETE FROM mangata_chapters WHERE manga_id = ?");
+            $stmt->execute([$manga_id]);
+            // Delete staff associated
+            $stmt = $pdo->prepare("DELETE FROM mangata_staff WHERE manga_id = ?");
+            $stmt->execute([$manga_id]);
+            // Delete manga itself
+            $stmt = $pdo->prepare("DELETE FROM mangata_mangas WHERE id = ?");
+            $stmt->execute([$manga_id]);
+            $pdo->commit();
+
+            api_send_success(['message' => 'پروژه مانهوا و تمامی چپترهای وابسته با موفقیت حذف شدند.']);
+            break;
+
+        case 'manhwa/update':
+            $admin_id = isset($params['admin_id']) ? (int)$params['admin_id'] : 0;
+            $manga_id = isset($params['manga_id']) ? (int)$params['manga_id'] : 0;
+            $title = trim($params['title'] ?? '');
+            $desc = trim($params['description'] ?? '');
+            $cover = trim($params['cover_image'] ?? '');
+
+            // Check admin
+            $stmt = $pdo->prepare("SELECT role FROM mangata_users WHERE id = ?");
+            $stmt->execute([$admin_id]);
+            $admin_role = $stmt->fetchColumn();
+
+            if ($admin_role !== 'administrator') {
+                api_send_error('فقط ادمین اجازه ویرایش جزئیات کارها را دارد.', 403);
+            }
+
+            if ($manga_id <= 0 || empty($title)) {
+                api_send_error('شناسه و عنوان پروژه الزامی است.');
+            }
+
+            $stmt = $pdo->prepare("UPDATE mangata_mangas SET title = ?, description = ?, cover_image = ? WHERE id = ?");
+            $stmt->execute([$title, $desc, $cover, $manga_id]);
+
+            api_send_success(['message' => 'اطلاعات پروژه مانهوا با موفقیت بروزرسانی شد.']);
+            break;
+
+        case 'chapter/delete':
+            $admin_id = isset($params['admin_id']) ? (int)$params['admin_id'] : 0;
+            $chapter_id = isset($params['chapter_id']) ? (int)$params['chapter_id'] : 0;
+
+            // Check admin
+            $stmt = $pdo->prepare("SELECT role FROM mangata_users WHERE id = ?");
+            $stmt->execute([$admin_id]);
+            $admin_role = $stmt->fetchColumn();
+
+            if ($admin_role !== 'administrator') {
+                api_send_error('فقط ادمین اجازه حذف چپترها را دارد.', 403);
+            }
+
+            if ($chapter_id <= 0) {
+                api_send_error('شناسه چپتر نامعتبر است.');
+            }
+
+            $stmt = $pdo->prepare("DELETE FROM mangata_chapters WHERE id = ?");
+            $stmt->execute([$chapter_id]);
+
+            api_send_success(['message' => 'فصل مانهوای انتخابی با موفقیت از سرور پایگاه داده حذف گردید.']);
+            break;
+
+        case 'user/list':
+            $admin_id = isset($params['admin_id']) ? (int)$params['admin_id'] : 0;
+
+            // Check admin
+            $stmt = $pdo->prepare("SELECT role FROM mangata_users WHERE id = ?");
+            $stmt->execute([$admin_id]);
+            $admin_role = $stmt->fetchColumn();
+
+            if ($admin_role !== 'administrator') {
+                api_send_error('دسترسی مدیریت کل کاربری لازم است.', 403);
+            }
+
+            $stmt = $pdo->query("SELECT id, username, email, role, created_at FROM mangata_users ORDER BY id DESC");
+            $users = [];
+            while ($row = $stmt->fetch()) {
+                $users[] = [
+                    'id' => (int)$row['id'],
+                    'username' => $row['username'],
+                    'email' => $row['email'],
+                    'role' => $row['role'],
+                    'created_at' => $row['created_at']
+                ];
+            }
+            api_send_success($users);
+            break;
+
+        case 'user/update-role':
+            $admin_id = isset($params['admin_id']) ? (int)$params['admin_id'] : 0;
+            $target_user_id = isset($params['user_id']) ? (int)$params['user_id'] : 0;
+            $role = trim($params['role'] ?? '');
+
+            // Check admin
+            $stmt = $pdo->prepare("SELECT role FROM mangata_users WHERE id = ?");
+            $stmt->execute([$admin_id]);
+            $admin_role = $stmt->fetchColumn();
+
+            if ($admin_role !== 'administrator') {
+                api_send_error('فقط ادمین اجازه بروزرسانی نقش کاربر را دارد.', 403);
+            }
+
+            $allowed_roles = ['administrator', 'subscriber', 'staff_translator', 'staff_redrawer', 'staff_cleaner', 'staff_ts'];
+            if ($target_user_id <= 0 || !in_array($role, $allowed_roles)) {
+                api_send_error('پارامترهای نقش کاربری نامعتبر است.');
+            }
+
+            $stmt = $pdo->prepare("UPDATE mangata_users SET role = ? WHERE id = ?");
+            $stmt->execute([$role, $target_user_id]);
+
+            api_send_success(['message' => 'نقش دسترسی کاربر انتخابی با موفقیت در دیتابیس تغییر یافت.']);
+            break;
+
+        case 'user/delete':
+            $admin_id = isset($params['admin_id']) ? (int)$params['admin_id'] : 0;
+            $target_user_id = isset($params['user_id']) ? (int)$params['user_id'] : 0;
+
+            // Check admin
+            $stmt = $pdo->prepare("SELECT role FROM mangata_users WHERE id = ?");
+            $stmt->execute([$admin_id]);
+            $admin_role = $stmt->fetchColumn();
+
+            if ($admin_role !== 'administrator') {
+                api_send_error('فقط ادمین اجازه حذف کلاینت‌ها را دارد.', 403);
+            }
+
+            if ($target_user_id <= 0) {
+                api_send_error('شناسه کاربر هدف نامعتبر است.');
+            }
+
+            // Keep admin protected
+            if ($target_user_id === $admin_id) {
+                api_send_error('شما نمی‌توانید حساب ادمین فعال خودتان را حذف کنید!');
+            }
+
+            $pdo->beginTransaction();
+            // Delete exams associated
+            $stmt = $pdo->prepare("DELETE FROM mangata_exams WHERE user_id = ?");
+            $stmt->execute([$target_user_id]);
+            // Delete staff associated
+            $stmt = $pdo->prepare("DELETE FROM mangata_staff WHERE user_id = ?");
+            $stmt->execute([$target_user_id]);
+            // Delete user
+            $stmt = $pdo->prepare("DELETE FROM mangata_users WHERE id = ?");
+            $stmt->execute([$target_user_id]);
+            $pdo->commit();
+
+            api_send_success(['message' => 'کاربر به همراه تمامی پرونده‌ها از پایگاه داده با موفقیت حذف گردید.']);
+            break;
+
         default:
             api_send_error('مسیر درخواست API نامعتبر است: ' . $path, 404);
             break;

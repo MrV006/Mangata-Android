@@ -141,26 +141,34 @@ $next_chap = $stmt_next->fetch();
             margin: 80px auto 0 auto;
             padding: 0;
             box-shadow: 0 0 40px rgba(0,0,0,0.8);
-            background: rgba(0,0,0,0.2);
+            background: #000;
             transition: max-width 0.3s ease;
             position: relative;
+            line-height: 0;
+            font-size: 0;
+            border: none !important;
         }
 
         /* Individual page loader integration */
         .img-wrapper {
             position: relative;
             width: 100%;
-            min-height: 400px;
-            background: rgba(0,0,0,0.15);
+            background: #000;
             overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            display: block;
+            margin: 0;
+            padding: 0;
+            line-height: 0;
+            font-size: 0;
+            border: none !important;
+            margin-bottom: -1px; /* Overlaps precisely by 1px to close any rasterization sub-pixel gaps */
         }
         
         /* Neon loader animation */
         .img-loader {
             position: absolute;
+            top: calc(50% - 20px);
+            left: calc(50% - 20px);
             width: 40px;
             height: 40px;
             border: 3px solid rgba(255, 117, 151, 0.1);
@@ -178,12 +186,31 @@ $next_chap = $stmt_next->fetch();
             width: 100%;
             height: auto;
             display: block;
-            margin: 0 auto;
-            border-bottom: 2px solid #000;
+            margin: 0;
+            padding: 0;
+            border: none !important;
+            outline: none !important;
+            vertical-align: bottom; /* Solves base alignment subpixel spacing */
             filter: brightness(var(--img-brightness));
             opacity: 0;
             transition: opacity 0.5s ease-out, filter 0.2s ease;
             z-index: 20;
+        }
+        
+        /* Visual Fullscreen simulated fallback stylesheet */
+        body.visual-fullscreen {
+            overflow-x: hidden;
+        }
+        body.visual-fullscreen #readerHeader {
+            display: none !important;
+        }
+        body.visual-fullscreen .reader-container {
+            margin-top: 0 !important;
+            max-width: 100vw !important;
+            width: 100vw !important;
+        }
+        body.visual-fullscreen .fullscreen-prompt {
+            display: none !important;
         }
         .manga-image.loaded {
             opacity: 1;
@@ -364,6 +391,7 @@ $next_chap = $stmt_next->fetch();
     
     <!-- Top Nav Chapter Select list -->
     <div style="display:flex; gap:10px;">
+        <button id="webFullscreenBtn" class="btn-nav" style="border-color: #03dac6; color: #03dac6; background: rgba(3,218,198,0.1); font-weight:bold; cursor:pointer;">📺 تمام صفحه</button>
         <?php if ($prev_chap): ?>
             <a href="?chapter_id=<?php echo $prev_chap['id']; ?>" class="btn-nav">◀ فصل قبلی</a>
         <?php endif; ?>
@@ -467,6 +495,61 @@ $next_chap = $stmt_next->fetch();
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Web Fullscreen Handler with cross-browser and simulated visual full-screen fallbacks
+    const fsBtn = document.getElementById('webFullscreenBtn');
+    
+    function toggleFullscreenMode() {
+        const docEl = document.documentElement;
+        const isFS = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement || document.body.classList.contains('visual-fullscreen');
+
+        if (!isFS) {
+            // Attempt standard API
+            const req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+            if (req) {
+                req.call(docEl).then(() => {
+                    fsBtn.innerHTML = '📺 خروج زوم';
+                }).catch(err => {
+                    // Fallback to simulated visual fullscreen
+                    document.body.classList.add('visual-fullscreen');
+                    fsBtn.innerHTML = '📺 خروج زوم';
+                });
+            } else {
+                // Fallback to simulated visual fullscreen
+                document.body.classList.add('visual-fullscreen');
+                fsBtn.innerHTML = '📺 خروج زوم';
+            }
+        } else {
+            // Exit fullscreen
+            const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+            if (exit) {
+                exit.call(document).then(() => {
+                    document.body.classList.remove('visual-fullscreen');
+                    fsBtn.innerHTML = '📺 تمام صفحه';
+                }).catch(err => {
+                    document.body.classList.remove('visual-fullscreen');
+                    fsBtn.innerHTML = '📺 تمام صفحه';
+                });
+            } else {
+                document.body.classList.remove('visual-fullscreen');
+                fsBtn.innerHTML = '📺 تمام صفحه';
+            }
+        }
+    }
+    
+    if (fsBtn) {
+        fsBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            toggleFullscreenMode();
+        });
+    }
+
+    // Double-click on images board inside reading board also triggers Fullscreen
+    document.addEventListener('dblclick', function(e) {
+        if (e.target.closest('#mangaReadingBoard')) {
+            toggleFullscreenMode();
+        }
+    });
+
     // 1. Double tap/single tap overlay togglers
     const header = document.getElementById('readerHeader');
     document.addEventListener('click', function(e) {

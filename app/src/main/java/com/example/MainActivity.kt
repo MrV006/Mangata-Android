@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,10 +33,12 @@ import com.example.data.MangaItem
 import com.example.ui.MangaViewModel
 import com.example.ui.components.AdminPanel
 import com.example.ui.components.MangaReaderView
+import com.example.ui.components.MangaDetailView
 import com.example.ui.components.RecruitmentPortal
 import com.example.ui.components.StaffDashboard
 import com.example.ui.theme.MangataTheme
 import com.example.ui.theme.SlateDarkBackground
+import androidx.compose.ui.text.style.TextOverflow
 
 class MainActivity : ComponentActivity() {
 
@@ -57,6 +60,7 @@ class MainActivity : ComponentActivity() {
                 var currentScreen by remember { mutableStateOf("home") } // "home", "recruitment", "staff", "admin"
                 var selectedChapterForReader by remember { mutableStateOf<ChapterItem?>(null) }
                 var selectedMangaForReader by remember { mutableStateOf<MangaItem?>(null) }
+                var selectedMangaForDetails by remember { mutableStateOf<MangaItem?>(null) }
 
                 // Display alerts
                 LaunchedEffect(errorMessage) {
@@ -102,6 +106,17 @@ class MainActivity : ComponentActivity() {
                                     selectedMangaForReader = null
                                 }
                             )
+                        } else if (selectedMangaForDetails != null) {
+                            MangaDetailView(
+                                manga = selectedMangaForDetails!!,
+                                chapters = chapters[selectedMangaForDetails!!.id] ?: emptyList(),
+                                userRole = user.role,
+                                onBack = { selectedMangaForDetails = null },
+                                onReadChapter = { chapter ->
+                                    selectedMangaForReader = selectedMangaForDetails
+                                    selectedChapterForReader = chapter
+                                }
+                            )
                         } else {
                             // Sub-screens routing
                             when (currentScreen) {
@@ -129,15 +144,13 @@ class MainActivity : ComponentActivity() {
                                         userRole = user.role,
                                         username = user.username,
                                         mangas = mangas,
-                                        chapters = chapters,
                                         isLoading = isLoading,
                                         onNavigateToRecruitment = { currentScreen = "recruitment" },
                                         onNavigateToStaff = { currentScreen = "staff" },
                                         onNavigateToAdmin = { currentScreen = "admin" },
-                                        onLoadChapters = { viewModel.fetchChapters(it) },
-                                        onReadChapter = { m, c ->
-                                            selectedMangaForReader = m
-                                            selectedChapterForReader = c
+                                        onSelectManga = { manga ->
+                                            selectedMangaForDetails = manga
+                                            viewModel.fetchChapters(manga.id)
                                         },
                                         onLogout = { viewModel.logout() }
                                     )
@@ -503,13 +516,11 @@ fun HomeScreenContent(
     userRole: String,
     username: String,
     mangas: List<MangaItem>,
-    chapters: Map<Int, List<ChapterItem>>,
     isLoading: Boolean,
     onNavigateToRecruitment: () -> Unit,
     onNavigateToStaff: () -> Unit,
     onNavigateToAdmin: () -> Unit,
-    onLoadChapters: (Int) -> Unit,
-    onReadChapter: (MangaItem, ChapterItem) -> Unit,
+    onSelectManga: (MangaItem) -> Unit,
     onLogout: () -> Unit
 ) {
     Scaffold(
@@ -517,7 +528,7 @@ fun HomeScreenContent(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(Color(0xFF141218))
                     .padding(horizontal = 16.dp, vertical = 14.dp)
             ) {
                 Row(
@@ -563,10 +574,10 @@ fun HomeScreenContent(
                     Button(
                         onClick = onNavigateToRecruitment,
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF7597).copy(alpha = 0.2f))
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = "Job", tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(16.dp))
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "Job", tint = Color(0xFFFF7597), modifier = Modifier.size(16.dp))
                             Text("آزمون استخدام", color = Color.White, fontSize = 11.sp)
                         }
                     }
@@ -577,7 +588,7 @@ fun HomeScreenContent(
                         Button(
                             onClick = onNavigateToStaff,
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
                         ) {
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(imageVector = Icons.Default.Send, contentDescription = "ZIP", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
@@ -595,7 +606,7 @@ fun HomeScreenContent(
                         ) {
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(imageVector = Icons.Default.Settings, contentDescription = "Admin", tint = Color.White, modifier = Modifier.size(16.dp))
-                                Text("تصحیح آزمون‌ها", color = Color.White, fontSize = 11.sp)
+                                Text("پنل ادمین کل", color = Color.White, fontSize = 11.sp)
                             }
                         }
                     }
@@ -607,7 +618,7 @@ fun HomeScreenContent(
                     text = "لیست آثار مانهوا هوشمند",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.secondary
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
 
@@ -627,9 +638,7 @@ fun HomeScreenContent(
                 items(mangas) { manga ->
                     MangaItemCard(
                         manga = manga,
-                        chapters = chapters[manga.id] ?: emptyList(),
-                        onExpandChapters = { onLoadChapters(manga.id) },
-                        onReadChapter = { onReadChapter(manga, it) }
+                        onClick = { onSelectManga(manga) }
                     )
                 }
             }
@@ -640,101 +649,85 @@ fun HomeScreenContent(
 @Composable
 fun MangaItemCard(
     manga: MangaItem,
-    chapters: List<ChapterItem>,
-    onExpandChapters: () -> Unit,
-    onReadChapter: (ChapterItem) -> Unit
+    onClick: () -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF16141F)),
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Cover
-                val coverUrl = manga.coverImage
-                if (!coverUrl.isNullOrEmpty()) {
-                    AsyncImage(
-                        model = coverUrl,
-                        contentDescription = manga.title,
-                        modifier = Modifier
-                            .size(width = 80.dp, height = 110.dp)
-                            .clip(RoundedCornerShape(6.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(text = manga.title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = Color.White)
-                    Text(text = manga.description, style = MaterialTheme.typography.labelMedium, color = Color.LightGray, maxLines = 3)
-                    
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    TextButton(
-                        onClick = {
-                            expanded = !expanded
-                            if (expanded && chapters.isEmpty()) {
-                                onExpandChapters()
-                            }
-                        },
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.align(Alignment.Start)
-                    ) {
-                        Text(
-                            text = if (expanded) "پنهان کردن چپترها ▲" else "نمایش چپترهای ZIP آپلود شده ▼",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Cover
+            val coverUrl = manga.coverImage
+            if (!coverUrl.isNullOrEmpty()) {
+                AsyncImage(
+                    model = coverUrl,
+                    contentDescription = manga.title,
+                    modifier = Modifier
+                        .size(width = 85.dp, height = 120.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.dp, Color(0xFFFF7597).copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.Crop
+                )
             }
 
-            AnimatedVisibility(visible = expanded) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.2f))
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (chapters.isEmpty()) {
-                        Text("هیچ فصلی برای نمایش وجود تدارد.", color = Color.Gray, style = MaterialTheme.typography.labelMedium)
-                    } else {
-                        chapters.forEach { chapter ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(text = "چپتر ${chapter.chapterNumber}", fontWeight = FontWeight.Bold, color = Color.White)
-                                    Text(text = chapter.title, style = MaterialTheme.typography.labelMedium, color = Color.LightGray)
-                                }
-
-                                Button(
-                                    onClick = { onReadChapter(chapter) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                                    shape = RoundedCornerShape(30.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Text("شروع خواندن", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                }
-                            }
-                        }
+                    Text(
+                        text = manga.title, 
+                        fontWeight = FontWeight.ExtraBold, 
+                        style = MaterialTheme.typography.titleMedium, 
+                        color = Color.White
+                    )
+                    
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFFFF7597).copy(alpha = 0.2f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("مشاهده جزئیات", color = Color(0xFFFF7597), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }
+                }
+
+                Text(
+                    text = manga.description, 
+                    style = MaterialTheme.typography.bodySmall, 
+                    color = Color.LightGray, 
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 18.sp
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(30.dp))
+                            .background(Color(0xFF231F2E))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text("مجموعه مانگاتا", color = Color(0xFF03DAC6), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Text(text = "آخرین انتشار: " + manga.createdAt.take(10), color = Color.Gray, fontSize = 9.sp)
                 }
             }
         }

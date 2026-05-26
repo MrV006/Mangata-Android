@@ -168,7 +168,10 @@ fun MangaReaderView(
                         ZoomableMangaPage(
                             imageUrl = imageUrl,
                             contentScale = selectedFitMode,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            onTap = {
+                                isOverlaysVisible = !isOverlaysVisible
+                            }
                         )
                     }
 
@@ -528,7 +531,8 @@ fun MangaReaderView(
 fun ZoomableMangaPage(
     imageUrl: String,
     contentScale: ContentScale,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onTap: () -> Unit
 ) {
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -540,24 +544,30 @@ fun ZoomableMangaPage(
             offset = Offset.Zero
         }
     }
+    var lastClickTime by remember { mutableStateOf(0L) }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(RectangleShape)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onDoubleTap = {
-                        if (scale > 1f) {
-                            scale = 1f
-                            offset = Offset.Zero
-                        } else {
-                            scale = 2.5f
-                        }
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) {
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - lastClickTime < 300) {
+                    if (scale > 1f) {
+                        scale = 1f
+                        offset = Offset.Zero
+                    } else {
+                        scale = 2.5f
                     }
-                )
+                } else {
+                    onTap()
+                }
+                lastClickTime = currentTime
             }
-            .transformable(state = state)
+            .transformable(state = state, enabled = scale > 1f)
     ) {
         SubcomposeAsyncImage(
             model = imageUrl,

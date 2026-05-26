@@ -157,6 +157,67 @@ if (isset($_POST['assign_staff_web']) && is_admin()) {
     }
 }
 
+// Handle manhwa edit/update from Super Admin
+if (isset($_POST['edit_manhwa_web']) && is_admin()) {
+    $m_id = (int)($_POST['edit_manga_id'] ?? 0);
+    $title = trim($_POST['manga_title'] ?? '');
+    $desc = trim($_POST['manga_desc'] ?? '');
+    $cover = trim($_POST['manga_cover'] ?? '');
+
+    if ($m_id > 0 && !empty($title)) {
+        $stmt = $pdo->prepare("UPDATE mangata_mangas SET title = ?, description = ?, cover_image = ? WHERE id = ?");
+        $stmt->execute([$title, $desc, $cover, $m_id]);
+        $admin_msg = '<div class="success-message font-bold">پروژه مانهوا با آیدی ' . $m_id . ' با موفقیت به اطلاعات جدید بروزرسانی شد.</div>';
+    }
+}
+
+// Handle manhwa deletion from Super Admin
+if (isset($_POST['delete_manhwa_web']) && is_admin()) {
+    $m_id = (int)($_POST['delete_manga_id'] ?? 0);
+    if ($m_id > 0) {
+        $pdo->beginTransaction();
+        $pdo->prepare("DELETE FROM mangata_chapters WHERE manga_id = ?")->execute([$m_id]);
+        $pdo->prepare("DELETE FROM mangata_staff WHERE manga_id = ?")->execute([$m_id]);
+        $pdo->prepare("DELETE FROM mangata_mangas WHERE id = ?")->execute([$m_id]);
+        $pdo->commit();
+        $admin_msg = '<div class="success-message font-bold" style="background: #b71c1c;">پروژه مانهوا به همراه تمامی فصول و دسترسی‌های وابسته از دیتابیس به صورت ماندگار حذف گردید.</div>';
+    }
+}
+
+// Handle chapter deletion from Super Admin
+if (isset($_POST['delete_chapter_web']) && is_admin()) {
+    $ch_id = (int)($_POST['delete_chapter_id'] ?? 0);
+    if ($ch_id > 0) {
+        $pdo->prepare("DELETE FROM mangata_chapters WHERE id = ?")->execute([$ch_id]);
+        $admin_msg = '<div class="success-message">چپتر انتخابی با موفقیت حذف شد.</div>';
+    }
+}
+
+// Handle user role change from Super Admin
+if (isset($_POST['update_user_role_web']) && is_admin()) {
+    $u_id = (int)($_POST['target_user_id'] ?? 0);
+    $role = trim($_POST['target_role'] ?? '');
+    $allowed_roles = ['administrator', 'subscriber', 'staff_translator', 'staff_redrawer', 'staff_cleaner', 'staff_ts'];
+
+    if ($u_id > 0 && in_array($role, $allowed_roles)) {
+        $pdo->prepare("UPDATE mangata_users SET role = ? WHERE id = ?")->execute([$role, $u_id]);
+        $admin_msg = '<div class="success-message">نقش دسترسی کاربر با موفقیت به ' . htmlspecialchars($role) . ' تغییر یافت.</div>';
+    }
+}
+
+// Handle user deletion from Super Admin
+if (isset($_POST['delete_user_web']) && is_admin()) {
+    $u_id = (int)($_POST['target_user_id'] ?? 0);
+    if ($u_id > 0 && $u_id != $_SESSION['user_id']) {
+        $pdo->beginTransaction();
+        $pdo->prepare("DELETE FROM mangata_exams WHERE user_id = ?")->execute([$u_id]);
+        $pdo->prepare("DELETE FROM mangata_staff WHERE user_id = ?")->execute([$u_id]);
+        $pdo->prepare("DELETE FROM mangata_users WHERE id = ?")->execute([$u_id]);
+        $pdo->commit();
+        $admin_msg = '<div class="success-message" style="background: #b71c1c;">کاربر انتخابی و مدارک وی به طور کامل پاکسازی شد.</div>';
+    }
+}
+
 // Fetch all mangas
 $stmt = $pdo->query("SELECT * FROM mangata_mangas ORDER BY id DESC");
 $mangas = $stmt->fetchAll();
@@ -277,8 +338,10 @@ $mangas = $stmt->fetchAll();
                         <?php 
                         $cover = !empty($m['cover_image']) ? $m['cover_image'] : 'https://placehold.co/300x450/1e1e1e/7c4dff?text=No+Cover';
                         ?>
-                        <img src="<?php echo htmlspecialchars($cover); ?>" style="width:100%; height:280px; object-fit:cover; border-radius:6px; margin-bottom:15px; border: 1px solid #333;" alt="<?php echo htmlspecialchars($m['title']); ?>">
-                        <h3 style="color:#fff; margin:0 0 10px 0; font-size:18px;"><?php echo htmlspecialchars($m['title']); ?></h3>
+                        <a href="details.php?id=<?php echo $m['id']; ?>" style="text-decoration:none; display:block;">
+                            <img src="<?php echo htmlspecialchars($cover); ?>" style="width:100%; height:280px; object-fit:cover; border-radius:6px; margin-bottom:15px; border: 1px solid #333;" alt="<?php echo htmlspecialchars($m['title']); ?>">
+                            <h3 style="color:#ff7597; margin:0 0 10px 0; font-size:18px; font-weight:900;"><?php echo htmlspecialchars($m['title']); ?> 👁️</h3>
+                        </a>
                         <p style="color:#aaa; font-size:13px; line-height: 1.6; margin-bottom:15px;"><?php echo htmlspecialchars($m['description']); ?></p>
                     </div>
                     
@@ -294,7 +357,15 @@ $mangas = $stmt->fetchAll();
                                 <?php foreach ($chaps as $c): ?>
                                     <div style="background:#252525; padding:8px 12px; border-radius:6px; display:flex; justify-content:space-between; align-items:center;">
                                         <span style="font-size:12px; font-weight:bold; color:#e0e0e0;">چپتر <?php echo (float)$c['chapter_number']; ?> - <?php echo htmlspecialchars($c['title']); ?></span>
-                                        <a href="reader.php?chapter_id=<?php echo $c['id']; ?>" class="btn btn-sm" style="padding: 4px 10px; font-size:11px; font-weight:bold; background:#7c4dff;">خوانش ریدر 👁️</a>
+                                        <div style="display:flex; gap: 8px; align-items:center;">
+                                            <a href="reader.php?chapter_id=<?php echo $c['id']; ?>" class="btn btn-sm" style="padding: 4px 10px; font-size:11px; font-weight:bold; background:#7c4dff;">خوانش ریدر 👁️</a>
+                                            <?php if (is_admin()): ?>
+                                                <form action="" method="POST" style="margin:0; padding:0; display:inline; background:transparent; border:none;" onsubmit="return confirm('آیا از حذف دائم این چپتر مطمئن هستید؟');">
+                                                    <input type="hidden" name="delete_chapter_id" value="<?php echo $c['id']; ?>">
+                                                    <button type="submit" name="delete_chapter_web" class="btn btn-sm" style="padding: 4px 8px; font-size:11px; font-weight:bold; background:#b71c1c; color:#fff;">حذف 🗑️</button>
+                                                </form>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
@@ -498,6 +569,110 @@ $mangas = $stmt->fetchAll();
             <?php else: ?>
                 <p style="color:#888;">هیچ امتحان ارسالی در سیستم موجود نیست.</p>
             <?php endif; ?>
+
+            <!-- Manage Mangas Panel -->
+            <h3 style="color:#ff5722; margin-top:40px; margin-bottom:15px; font-size:18px;">🎨 مدیریت و ویرایش آثار موجود:</h3>
+            <div style="overflow-x:auto; margin-bottom:30px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>آیدی مانهوا</th>
+                            <th>عنوان اثر</th>
+                            <th>توضیحات کوتاه</th>
+                            <th>لینک کاور</th>
+                            <th>عملیات ویرایش / حذف</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($mangas as $man): ?>
+                            <tr>
+                                <td style="text-align:center;">
+                                    <code style="color:#03dac6; font-weight:bold;"><?php echo $man['id']; ?></code>
+                                </td>
+                                <form action="" method="POST" style="margin:0; padding:0; background:transparent; border:none; display:contents;">
+                                    <input type="hidden" name="edit_manga_id" value="<?php echo $man['id']; ?>">
+                                    <td>
+                                        <input type="text" name="manga_title" value="<?php echo htmlspecialchars($man['title']); ?>" required style="margin:0; padding:6px; font-size:12px; border-radius:6px; background:#111; color:#fff; border:1px solid #333;">
+                                    </td>
+                                    <td>
+                                        <textarea name="manga_desc" required style="margin:0; padding:6px; font-size:12px; height:50px; width:100%; min-width:180px; border-radius:6px; background:#111; color:#fff; border:1px solid #333; font-family:inherit;"><?php echo htmlspecialchars($man['description']); ?></textarea>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="manga_cover" value="<?php echo htmlspecialchars($man['cover_image']); ?>" style="margin:0; padding:6px; font-size:12px; width:100%; border-radius:6px; background:#111; color:#fff; border:1px solid #333;">
+                                    </td>
+                                    <td>
+                                        <div style="display:flex; gap:10px; justify-content:center;">
+                                            <button type="submit" name="edit_manhwa_web" class="btn btn-sm" style="background:#4caf50; font-weight:bold; padding: 6px 12px; border-radius:6px;">ذخیره 💾</button>
+                                        </div>
+                                    </form>
+                                    <div style="display:flex; justify-content:center; margin-top:5px;">
+                                        <form action="" method="POST" style="margin:0; padding:0; background:transparent; border:none;" onsubmit="return confirm('⚠️ ادمین گرامی، آیا مطمئن هستید؟ با حذف این اثر تمامی زپیل‌های آپلود شده و تاریخچه چپترهای آن به طور کامل پاک می‌شوند!');">
+                                            <input type="hidden" name="delete_manga_id" value="<?php echo $man['id']; ?>">
+                                            <button type="submit" name="delete_manhwa_web" class="btn btn-sm" style="background:#b71c1c; font-weight:bold; padding: 6px 12px; border-radius:6px;">حذف کامل 🗑️</button>
+                                        </form>
+                                    </div>
+                                    </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Manage Users Panel -->
+            <h3 style="color:#ff5722; margin-top:40px; margin-bottom:15px; font-size:18px;">👤 مدیریت تمام کاربران و تغییر نقش دسترسی:</h3>
+            <div style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>شناسه</th>
+                            <th>نام کاربری</th>
+                            <th>ایمیل</th>
+                            <th>نقش دسترسی فعلی</th>
+                            <th>تغییر نقش</th>
+                            <th>عملیات حساب</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php
+                        $stmt_users = $pdo->query("SELECT * FROM mangata_users ORDER BY id DESC");
+                        $all_users = $stmt_users->fetchAll();
+                        foreach ($all_users as $usr): ?>
+                            <tr>
+                                <td style="text-align:center;"><code><?php echo $usr['id']; ?></code></td>
+                                <td><strong><?php echo htmlspecialchars($usr['username']); ?></strong></td>
+                                <td><?php echo htmlspecialchars($usr['email']); ?></td>
+                                <td style="text-align:center;">
+                                    <span class="badge" style="background: #3f51b5; color:#fff; padding:4px 8px; border-radius:6px; font-size:11px;"><?php echo htmlspecialchars($usr['role']); ?></span>
+                                </td>
+                                <td>
+                                    <form action="" method="POST" style="display:flex; justify-content:center; gap:10px; margin:0; padding:0; background:transparent; border:none; width:100%;">
+                                        <input type="hidden" name="target_user_id" value="<?php echo $usr['id']; ?>">
+                                        <select name="target_role" style="margin:0; padding:5px; font-size:12px; width:140px; background:#111; color:#fff; border:1px solid #333; border-radius:6px; text-align:center;">
+                                            <option value="subscriber" <?php echo $usr['role'] === 'subscriber' ? 'selected' : ''; ?>>کاربر عادی (Subscriber)</option>
+                                            <option value="administrator" <?php echo $usr['role'] === 'administrator' ? 'selected' : ''; ?>>مدیر کل (Administrator)</option>
+                                            <option value="staff_translator" <?php echo $usr['role'] === 'staff_translator' ? 'selected' : ''; ?>>مترجم تیم (Translator)</option>
+                                            <option value="staff_redrawer" <?php echo $usr['role'] === 'staff_redrawer' ? 'selected' : ''; ?>>طراح تیم (Redrawer)</option>
+                                            <option value="staff_cleaner" <?php echo $usr['role'] === 'staff_cleaner' ? 'selected' : ''; ?>>پاک کننده (Cleaner)</option>
+                                            <option value="staff_ts" <?php echo $usr['role'] === 'staff_ts' ? 'selected' : ''; ?>>تایپ‌ستر (Typesetter)</option>
+                                        </select>
+                                        <button type="submit" name="update_user_role_web" class="btn btn-sm" style="background:#03dac6; color:#000; font-weight:bold; border-radius:6px; padding:6px 10px;">بزن ⚡</button>
+                                    </form>
+                                </td>
+                                <td style="text-align:center;">
+                                    <?php if ($usr['id'] != $_SESSION['user_id']): ?>
+                                        <form action="" method="POST" style="margin:0; padding:0; background:transparent; border:none;" onsubmit="return confirm('آیا از حذف دائم این حساب حساب مطمئن هستید؟');">
+                                            <input type="hidden" name="target_user_id" value="<?php echo $usr['id']; ?>">
+                                            <button type="submit" name="delete_user_web" class="btn btn-sm" style="background:#b71c1c; font-weight:bold; padding: 6px 12px; border-radius:6px;">حذف کاربر 🗑️</button>
+                                        </form>
+                                    <?php else: ?>
+                                        <span style="color:#ef5350; font-size:11px; font-weight:bold;">(شما)</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
 
         </div>
     <?php endif; ?>
