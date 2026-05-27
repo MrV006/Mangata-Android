@@ -43,6 +43,53 @@ if (isset($_GET['logout'])) {
     exit;
 }
 
+// Handle general membership signup
+$register_msg = '';
+if (isset($_POST['web_register'])) {
+    $username = trim($_POST['reg_username'] ?? '');
+    $email = trim($_POST['reg_email'] ?? '');
+    $password = trim($_POST['reg_password'] ?? '');
+
+    if (!empty($username) && !empty($email) && !empty($password)) {
+        // Check duplication
+        $stmt_check = $pdo->prepare("SELECT COUNT(*) FROM mangata_users WHERE username = ? OR email = ?");
+        $stmt_check->execute([$username, $email]);
+        if ($stmt_check->fetchColumn() > 0) {
+            $register_msg = '<div class="error-message">نام کاربری یا آدرس ایمیل تکراری است.</div>';
+        } else {
+            $password_hash = password_hash($password, PASSWORD_BCRYPT);
+            $stmt_reg = $pdo->prepare("INSERT INTO mangata_users (username, email, password_hash, role) VALUES (?, ?, ?, 'subscriber')");
+            $stmt_reg->execute([$username, $email, $password_hash]);
+            $register_msg = '<div class="success-message">ثبت‌نام شما با موفقیت انجام شد! اکنون می‌توانید از فرم ورود برای دسترسی استفاده کنید.</div>';
+        }
+    } else {
+        $register_msg = '<div class="error-message">لطفاً تمامی فیلدها را وارد کنید.</div>';
+    }
+}
+
+// Handle self password/profile edit
+$self_update_msg = '';
+if (isset($_POST['update_own_profile']) && is_logged_in()) {
+    $u_id = $_SESSION['user_id'];
+    $email = trim($_POST['own_email'] ?? '');
+    $new_password = trim($_POST['own_password'] ?? '');
+
+    if (!empty($email)) {
+        // Update email
+        $stmt = $pdo->prepare("UPDATE mangata_users SET email = ? WHERE id = ?");
+        $stmt->execute([$email, $u_id]);
+        
+        if (!empty($new_password)) {
+            $pass_hash = password_hash($new_password, PASSWORD_BCRYPT);
+            $stmt_pw = $pdo->prepare("UPDATE mangata_users SET password_hash = ? WHERE id = ?");
+            $stmt_pw->execute([$pass_hash, $u_id]);
+        }
+        $self_update_msg = '<div class="success-message">مشخصات و رمز عبور حساب کاربری شما با موفقیت بروزرسانی شد.</div>';
+    } else {
+        $self_update_msg = '<div class="error-message">لطفاً آدرس ایمیل خود را خالی نگذارید.</div>';
+    }
+}
+
 // Handle recruitment exam upload form submit in pure PHP
 $upload_msg = '';
 if (isset($_POST['submit_exam'])) {
@@ -136,10 +183,14 @@ if (isset($_POST['create_manhwa_web']) && is_admin()) {
     $title = trim($_POST['manga_title'] ?? '');
     $desc = trim($_POST['manga_desc'] ?? '');
     $cover = trim($_POST['manga_cover'] ?? '');
+    $genres = trim($_POST['manga_genres'] ?? '');
+    $release_year = trim($_POST['manga_release_year'] ?? '');
+    $main_characters = trim($_POST['manga_main_characters'] ?? '');
+    $author = trim($_POST['manga_author'] ?? '');
 
     if (!empty($title)) {
-        $stmt = $pdo->prepare("INSERT INTO mangata_mangas (title, description, cover_image) VALUES (?, ?, ?)");
-        $stmt->execute([$title, $desc, $cover]);
+        $stmt = $pdo->prepare("INSERT INTO mangata_mangas (title, description, cover_image, genres, release_year, main_characters, author) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$title, $desc, $cover, $genres, $release_year, $main_characters, $author]);
         $admin_msg = '<div class="success-message font-bold">پروژه مانهوا جدید «' . htmlspecialchars($title) . '» با موفقیت به صورت زنده ایجاد و سینک گردید.</div>';
     }
 }
@@ -163,10 +214,14 @@ if (isset($_POST['edit_manhwa_web']) && is_admin()) {
     $title = trim($_POST['manga_title'] ?? '');
     $desc = trim($_POST['manga_desc'] ?? '');
     $cover = trim($_POST['manga_cover'] ?? '');
+    $genres = trim($_POST['manga_genres'] ?? '');
+    $release_year = trim($_POST['manga_release_year'] ?? '');
+    $main_characters = trim($_POST['manga_main_characters'] ?? '');
+    $author = trim($_POST['manga_author'] ?? '');
 
     if ($m_id > 0 && !empty($title)) {
-        $stmt = $pdo->prepare("UPDATE mangata_mangas SET title = ?, description = ?, cover_image = ? WHERE id = ?");
-        $stmt->execute([$title, $desc, $cover, $m_id]);
+        $stmt = $pdo->prepare("UPDATE mangata_mangas SET title = ?, description = ?, cover_image = ?, genres = ?, release_year = ?, main_characters = ?, author = ? WHERE id = ?");
+        $stmt->execute([$title, $desc, $cover, $genres, $release_year, $main_characters, $author, $m_id]);
         $admin_msg = '<div class="success-message font-bold">پروژه مانهوا با آیدی ' . $m_id . ' با موفقیت به اطلاعات جدید بروزرسانی شد.</div>';
     }
 }
@@ -193,15 +248,31 @@ if (isset($_POST['delete_chapter_web']) && is_admin()) {
     }
 }
 
-// Handle user role change from Super Admin
-if (isset($_POST['update_user_role_web']) && is_admin()) {
+// Handle user account upgrade (full edits) from Super Admin
+if (isset($_POST['update_user_full_web']) && is_admin()) {
     $u_id = (int)($_POST['target_user_id'] ?? 0);
+    $username = trim($_POST['target_username'] ?? '');
+    $email = trim($_POST['target_email'] ?? '');
     $role = trim($_POST['target_role'] ?? '');
+    $new_password = trim($_POST['target_password'] ?? '');
+    
     $allowed_roles = ['administrator', 'subscriber', 'staff_translator', 'staff_redrawer', 'staff_cleaner', 'staff_ts'];
 
-    if ($u_id > 0 && in_array($role, $allowed_roles)) {
-        $pdo->prepare("UPDATE mangata_users SET role = ? WHERE id = ?")->execute([$role, $u_id]);
-        $admin_msg = '<div class="success-message">نقش دسترسی کاربر با موفقیت به ' . htmlspecialchars($role) . ' تغییر یافت.</div>';
+    if ($u_id > 0 && @in_array($role, $allowed_roles) && !empty($username) && !empty($email)) {
+        // Prepare base update values
+        $stmt = $pdo->prepare("UPDATE mangata_users SET username = ?, email = ?, role = ? WHERE id = ?");
+        $stmt->execute([$username, $email, $role, $u_id]);
+        
+        // If a new password is provided, hash and update it
+        if (!empty($new_password)) {
+            $pass_hash = password_hash($new_password, PASSWORD_BCRYPT);
+            $stmt_pw = $pdo->prepare("UPDATE mangata_users SET password_hash = ? WHERE id = ?");
+            $stmt_pw->execute([$pass_hash, $u_id]);
+        }
+        
+        $admin_msg = '<div class="success-message">پروفایل کاربر شماره ' . $u_id . ' با موفقیت ویرایش و ثبت گردید.</div>';
+    } else {
+        $admin_msg = '<div class="error-message">داده‌های ارسالی برای ویرایش حساب معتبر نیست یا فیلدها خالی رها شده‌اند.</div>';
     }
 }
 
@@ -218,8 +289,56 @@ if (isset($_POST['delete_user_web']) && is_admin()) {
     }
 }
 
-// Fetch all mangas
-$stmt = $pdo->query("SELECT * FROM mangata_mangas ORDER BY id DESC");
+// Handle global settings update from Super Admin
+if (isset($_POST['update_mangata_settings']) && is_admin()) {
+    $app_active = trim($_POST['force_update_app_active'] ?? '0');
+    $app_url = trim($_POST['force_update_app_url'] ?? '');
+    $app_msg = trim($_POST['force_update_app_msg'] ?? '');
+    $web_active = trim($_POST['force_update_web_active'] ?? '0');
+    $web_version = trim($_POST['force_update_web_version'] ?? '1');
+    $web_msg = trim($_POST['force_update_web_msg'] ?? '');
+
+    set_mangata_setting('force_update_app_active', $app_active);
+    set_mangata_setting('force_update_app_url', $app_url);
+    set_mangata_setting('force_update_app_msg', $app_msg);
+    set_mangata_setting('force_update_web_active', $web_active);
+    set_mangata_setting('force_update_web_version', $web_version);
+    set_mangata_setting('force_update_web_msg', $web_msg);
+
+    $admin_msg = '<div class="success-message">تنظیمات آپدیت اجباری و سیستم بازنشانی دیتای کش با موفقیت روی سرور ثبت و اعمال گردید.</div>';
+}
+
+// Fetch all mangas with dynamic searching and filtering
+$search = trim($_GET['search'] ?? '');
+$genre = trim($_GET['genre'] ?? '');
+$year = trim($_GET['year'] ?? '');
+$character = trim($_GET['character'] ?? '');
+
+$query = "SELECT * FROM mangata_mangas WHERE 1=1";
+$sql_params = [];
+
+if (!empty($search)) {
+    $query .= " AND (title LIKE ? OR author LIKE ? OR description LIKE ?)";
+    $sql_params[] = "%$search%";
+    $sql_params[] = "%$search%";
+    $sql_params[] = "%$search%";
+}
+if (!empty($genre)) {
+    $query .= " AND genres LIKE ?";
+    $sql_params[] = "%$genre%";
+}
+if (!empty($year)) {
+    $query .= " AND release_year = ?";
+    $sql_params[] = $year;
+}
+if (!empty($character)) {
+    $query .= " AND main_characters LIKE ?";
+    $sql_params[] = "%$character%";
+}
+
+$query .= " ORDER BY id DESC";
+$stmt = $pdo->prepare($query);
+$stmt->execute($sql_params);
 $mangas = $stmt->fetchAll();
 ?>
 <!DOCTYPE html>
@@ -298,30 +417,235 @@ $mangas = $stmt->fetchAll();
 </head>
 <body>
 
-<header>
-    <h1><a href="." style="color:#bb86fc; font-weight:bold;">MANGATA | مانگاتا</a></h1>
-    <nav style="display: flex; align-items: center; gap: 20px;">
-        <a href="." style="color:#bb86fc; text-decoration:none; font-weight:bold;">صفحه اصلی</a>
-        <a href="#manhwa" style="color:#fff; text-decoration:none;">لیست کارهای فعال</a>
-        <a href="#recruitment" style="color:#fff; text-decoration:none;">فرصت‌های استخدام</a>
-        <?php if (!is_logged_in()): ?>
-            <a href="#auth" class="btn btn-sm" style="background:#03dac6; color:#000; font-weight:bold;">ورود اعضا</a>
+<?php
+$web_force_active = get_mangata_setting('force_update_web_active', '0') === '1';
+$web_version = get_mangata_setting('force_update_web_version', '1');
+$web_msg = get_mangata_setting('force_update_web_msg', 'به‌روزرسانی مهمی برای وب‌سایت مانگاتا در دیتابیس ثبت شده است. جهت ارتقاء ثبات سیستم، تمیزکننده عمیق کش و دارایی‌ها را اجرا کنید.');
+$user_is_admin = is_admin() ? 'true' : 'false';
+?>
+
+<div id="web-force-update-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 8, 15, 0.98); z-index: 999999; align-items: center; justify-content: center; direction: rtl; font-family: inherit; padding: 20px; box-sizing: border-box;">
+    <div style="background: #1e1b24; border: 2px solid #ff5722; max-width: 600px; width: 100%; border-radius: 12px; padding: 30px; text-align: center; box-shadow: 0 10px 30px rgba(255, 87, 34, 0.2);">
+        <div style="font-size: 60px; margin-bottom: 20px;">🔄</div>
+        <h2 style="color: #ff5722; margin-top: 0; font-weight: bold; font-size: 22px;">بروزرسانی حافظه و دارایی‌های وب‌سایت</h2>
+        <p style="color: #ccc; font-size: 14px; line-height: 1.8; margin-bottom: 30px;">
+            <?php echo nl2br(htmlspecialchars($web_msg)); ?>
+        </p>
+        <button onclick="executeForcedWebCacheRefresh()" style="background: linear-gradient(135deg, #ff5722, #ff7597); color: #000; font-weight: bold; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; cursor: pointer; transition: transform 0.2s;">
+            🔄 بروزرسانی حافظه و بارگذاری دارایی‌های جدید
+        </button>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const isForceActive = <?php echo $web_force_active ? 'true' : 'false'; ?>;
+    const dbWebVersion = "<?php echo htmlspecialchars($web_version); ?>";
+    const isAdmin = <?php echo $user_is_admin; ?>;
+    
+    const acknowledgedVersion = localStorage.getItem('acknowledged_web_version');
+    
+    if (isForceActive && !isAdmin && acknowledgedVersion !== dbWebVersion) {
+        document.getElementById('web-force-update-modal').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+});
+
+function executeForcedWebCacheRefresh() {
+    const reservedKeys = ['user_id', 'username', 'user_role', 'session_token'];
+    const values = {};
+    reservedKeys.forEach(k => {
+         const val = localStorage.getItem(k);
+         if (val) values[k] = val;
+    });
+    
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    Object.keys(values).forEach(k => {
+         localStorage.setItem(k, values[k]);
+    });
+    
+    localStorage.setItem('acknowledged_web_version', "<?php echo htmlspecialchars($web_version); ?>");
+    window.location.reload(true);
+}
+</script>
+
+<header style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:15px; padding:15px 5%;">
+    <h1><a href="." style="color:#bb86fc; font-weight:bold; text-decoration:none;">MANGATA | مانگاتا 🎨</a></h1>
+    <nav style="display: flex; flex-wrap:wrap; align-items: center; gap: 15px;">
+        <a href="." style="color:#bb86fc; text-decoration:none; font-weight:bold; font-size:14px;">صفحه اصلی 🏠</a>
+        <?php if (is_logged_in()): ?>
+            <a href="?page=profile" style="color:#fff; text-decoration:none; font-weight:bold; font-size:14px;">پروفایل کاربری من 👤</a>
+            <span style="color:#03dac6; font-size:12px; background:rgba(3,218,198,0.1); padding:4px 10px; border-radius:6px;">کاربر: <strong><?php echo htmlspecialchars($_SESSION['username']); ?></strong></span>
+            <a href="?logout=1" class="btn btn-sm" style="background:#b71c1c; color:#fff; border-radius:6px; font-weight:bold; padding:6px 12px;">خروج 🚪</a>
         <?php else: ?>
-            <span style="color:#03dac6; font-size:14px;">کاربر: <strong><?php echo htmlspecialchars($_SESSION['username']); ?></strong> (<?php echo htmlspecialchars($_SESSION['user_role']); ?>)</span>
-            <a href="?logout=1" class="btn btn-sm" style="background:#b71c1c;">خروج</a>
+            <span style="color:#ff7597; font-size:13px; font-weight:bold;">ورود الزامی است 🔒</span>
         <?php endif; ?>
     </nav>
 </header>
 
 <div class="container">
     
-    <!-- Hero Header -->
-    <div class="hero">
-        <h2 style="color:#ff7597; font-size: 32px; margin:0 0 15px 0;">قدرتمندترین پورتال اختصاصی و زنده مانگاتا</h2>
-        <p style="color:#ccc; font-size:16px; max-width: 800px; margin: 0 auto; line-height:1.7;">
-            از وردپرس خارج شدیم! اکنون با یک معماری فوق‌العاده سریع و اختصاصی PHP مجهز به پایگاه‌داده واقعی <code style="background:#000; padding:2px 8px; border-radius:4px; color:#bb86fc;">mrvir111_mangata_db</code> به صورت تمام سینک با اپلیکیشن اندروید در خدمت شماییم.
-        </p>
-    </div>
+    <?php if (!is_logged_in()): ?>
+        <!-- ==================== AUTH GATE ==================== -->
+        <div style="max-width: 900px; margin: 40px auto; padding: 10px;">
+            <div class="hero" style="margin-bottom: 30px; text-align:center;">
+                <h2 style="color:#ff7597; font-size: 28px; margin:0 0 10px 0;">🔑 درگاه ورود و عضویت رسانه مانگاتا</h2>
+                <p style="color:#ccc; font-size:14px; margin:0; line-height:1.7;">
+                    برای مشاهده آخرین پروژه‌ها، ریدر آنلاین مانگا و ثبت‌نام در کادر فنی تیم، لطفاً ابتدا وارد حساب کاربری خود شوید یا حساب جدید بسازید.
+                </p>
+            </div>
+
+            <?php echo $login_msg; ?>
+            <?php echo $register_msg; ?>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; margin-top:20px;">
+                <!-- Register Card -->
+                <div class="card" style="border: 1px solid rgba(255,117,151,0.15); background:#1a1a1a;">
+                    <h3 style="color:#ff7597; margin-top:0; border-bottom:1px solid #333; padding-bottom:10px;">عضویت دائم (ثبت‌نام سریع)</h3>
+                    <form action="" method="POST" style="display:flex; flex-direction:column; gap:15px; background:transparent; padding:0; border:none;">
+                        <div>
+                            <label style="display:block; color:#aaa; margin-bottom:6px; font-size:13px;">نام کاربری (لاتین):</label>
+                            <input type="text" name="reg_username" required placeholder="مثال: amir12" style="width:100%; padding:8px; border:1px solid #333; border-radius:8px; background:#111; color:#fff;">
+                        </div>
+                        <div>
+                            <label style="display:block; color:#aaa; margin-bottom:6px; font-size:13px;">ایمیل:</label>
+                            <input type="email" name="reg_email" required placeholder="example@gmail.com" style="width:100%; padding:8px; border:1px solid #333; border-radius:8px; background:#111; color:#fff;">
+                        </div>
+                        <div>
+                            <label style="display:block; color:#aaa; margin-bottom:6px; font-size:13px;">کلمه عبور:</label>
+                            <input type="password" name="reg_password" required placeholder="کلمه عبور" style="width:100%; padding:8px; border:1px solid #333; border-radius:8px; background:#111; color:#fff;">
+                        </div>
+                        <button type="submit" name="web_register" class="btn" style="background:#ff7597; color:#000; font-weight:bold; margin-top:10px; width:100%;">ثبت حساب در دیتابیس 🚀</button>
+                    </form>
+                </div>
+
+                <!-- Login Card -->
+                <div class="card" style="border: 1px solid rgba(3,218,198,0.15); background:#1a1a1a;">
+                    <h3 style="color:#03dac6; margin-top:0; border-bottom:1px solid #333; padding-bottom:10px;">ورود به حساب کاربری</h3>
+                    <form action="" method="POST" style="display:flex; flex-direction:column; gap:15px; background:transparent; padding:0; border:none;">
+                        <div>
+                            <label style="display:block; color:#aaa; margin-bottom:6px; font-size:13px;">نام کاربری یا ایمیل:</label>
+                            <input type="text" name="username" required placeholder="نام کاربری یا ایمیل" style="width:100%; padding:8px; border:1px solid #333; border-radius:8px; background:#111; color:#fff;">
+                        </div>
+                        <div>
+                            <label style="display:block; color:#aaa; margin-bottom:6px; font-size:13px;">کلمه عبور:</label>
+                            <input type="password" name="password" required placeholder="کلمه عبور حساب" style="width:100%; padding:8px; border:1px solid #333; border-radius:8px; background:#111; color:#fff;">
+                        </div>
+                        <button type="submit" name="web_login" class="btn" style="background:#03dac6; color:#000; font-weight:bold; margin-top:10px; width:100%;">ورود امن 🔐</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    <?php elseif (isset($_GET['page']) && $_GET['page'] === 'profile'): ?>
+        <!-- ==================== STUNNING PROFILE TAB ==================== -->
+        <div style="max-width: 850px; margin: 40px auto; padding: 10px;">
+            <div class="card" style="border: 1.5px solid rgba(187,134,252,0.3); background:#1e1b24;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:15px; margin-bottom:20px;">
+                    <h2 style="color:#bb86fc; margin:0; font-size:22px;">👤 پیشخوان پروفایل کاربری من</h2>
+                    <a href="." class="btn btn-sm" style="background:#333; color:#fff; border-radius:6px; font-weight:bold; text-decoration:none;">بازگشت به صفحه اصلی 🏠</a>
+                </div>
+
+                <?php echo $self_update_msg; ?>
+
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:25px; margin-top:15px;">
+                    <!-- User details list -->
+                    <div style="background:#111; padding:20px; border-radius:8px; border:1px solid #222;">
+                        <h3 style="color:#03dac6; margin-top:0; font-size:16px; border-bottom:1px solid #222; padding-bottom:8px;">اطلاعات کاربری</h3>
+                        <p style="color:#ccc; font-size:14px; margin:12px 0;"><strong>نام کاربری:</strong> <code style="color:#ff7597; font-size:15px;"><?php echo htmlspecialchars($_SESSION['username']); ?></code></p>
+                        <p style="color:#ccc; font-size:14px; margin:12px 0;"><strong>نقش دسترسی پلتفرم:</strong> <span class="badge" style="background:#bb86fc; color:#000; font-size:12px; font-weight:bold; padding:4px 8px;"><?php echo htmlspecialchars($_SESSION['user_role']); ?></span></p>
+                        
+                        <?php
+                        // Fetch fresh email and exam status from DB
+                        $stmt_profile = $pdo->prepare("SELECT email FROM mangata_users WHERE id = ?");
+                        $stmt_profile->execute([$_SESSION['user_id']]);
+                        $self_email = $stmt_profile->fetchColumn();
+
+                        $stmt_exam_status = $pdo->prepare("SELECT status, score FROM mangata_exams WHERE user_id = ? ORDER BY id DESC LIMIT 1");
+                        $stmt_exam_status->execute([$_SESSION['user_id']]);
+                        $exam_info = $stmt_exam_status->fetch();
+                        ?>
+
+                        <p style="color:#ccc; font-size:14px; margin:12px 0;"><strong>آدرس ایمیل:</strong> <?php echo htmlspecialchars($self_email); ?></p>
+                        
+                        <div style="margin-top:20px; background:#1c1724; padding:12px; border-radius:6px; border:1px solid rgba(187,134,252,0.15);">
+                            <h4 style="color:#ff7597; margin:0 0 8px 0; font-size:13px; font-weight:bold;">وضعیت استخدام و آزمون شما:</h4>
+                            <?php if ($exam_info): ?>
+                                <span style="font-size:13px; font-weight:bold; color:#03dac6;">
+                                    <?php echo htmlspecialchars($exam_info['status']); ?> 
+                                    <?php if ($exam_info['score'] !== null) { echo " (امتیاز ارزیابی: " . $exam_info['score'] . ")"; } ?>
+                                </span>
+                            <?php else: ?>
+                                <span style="font-size:12px; color:#777;">شما تاکنون هیچ سند ارزیابی آپلود نکرده‌اید.</span>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Special Administrative/Staff link -->
+                        <?php if ($_SESSION['user_role'] === 'administrator' || strpos($_SESSION['user_role'], 'staff_') === 0): ?>
+                            <div style="margin-top:25px; text-align:center;">
+                                <a href="index.php#admin-desk" class="btn" style="background:#03dac6; color:#000; font-weight:bold; display:block; padding:10px; border-radius:8px; border:1px solid #03dac6; text-decoration:none;">ورود به پیشخوان پیشرفته مدیریت ⚡</a>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Change password form -->
+                    <div style="background:#111; padding:20px; border-radius:8px; border:1px solid #222;">
+                        <h3 style="color:#ff7597; margin-top:0; font-size:16px; border-bottom:1px solid #222; padding-bottom:8px;">ویرایش مشخصات / تغییر رمز عبور</h3>
+                        <form action="" method="POST" style="display:flex; flex-direction:column; gap:15px; background:transparent; padding:0; border:none;">
+                            <div>
+                                <label style="display:block; color:#aaa; margin-bottom:5px; font-size:12px;">ایمیل:</label>
+                                <input type="email" name="own_email" required value="<?php echo htmlspecialchars($self_email); ?>" style="width:100%; padding:8px; border:1px solid #333; background:#222; color:#fff; border-radius:6px;">
+                            </div>
+                            <div>
+                                <label style="display:block; color:#aaa; margin-bottom:5px; font-size:12px;">کلمه عبور جدید:</label>
+                                <input type="password" name="own_password" placeholder="تنها در صورت تغییر پر کنید" style="width:100%; padding:8px; border:1px solid #333; background:#222; color:#fff; border-radius:6px;">
+                            </div>
+                            <button type="submit" name="update_own_profile" class="btn" style="background:#bb86fc; color:#000; font-weight:bold; width:100%;">ثبت بروزرسانی حساب 💾</button>
+                        </form>
+                    </div>
+
+                    <!-- Cache and System Sync System -->
+                    <div style="background:#111; padding:20px; border-radius:8px; border:1px solid #222; grid-column: 1 / -1;">
+                        <h3 style="color:#03dac6; margin-top:0; font-size:16px; border-bottom:1px solid #222; padding-bottom:8px;">🚀 مرکز مدیریت کش و همگام‌سازی سریع</h3>
+                        <p style="color:#aaa; font-size:12px; line-height:1.7; margin-bottom:15px;">اگر احساس می‌کنید اطلاعات سایت، مانهواها یا قالب وبسایت برای شما قدیمی است، با زدن دکمه زیر حافظه موقت (کش) سیستم به طور کامل و زنده بدون نیاز به خروج از حساب کاربری بازنشانی می‌شود.</p>
+                        <button onclick="triggerWebCacheRefresh()" class="btn" style="background:linear-gradient(135deg, #0288d1, #0097a7); color:#fff; font-weight:bold; border-radius:8px; padding:10px 20px; border:none; cursor:pointer;">🔄 بروزرسانی و بازنشانی حافظه کش وب‌سایت</button>
+                        
+                        <script>
+                        function triggerWebCacheRefresh() {
+                            const reservedKeys = ['user_id', 'username', 'user_role', 'session_token'];
+                            const values = {};
+                            reservedKeys.forEach(k => {
+                                const val = localStorage.getItem(k);
+                                if (val) values[k] = val;
+                            });
+                            
+                            localStorage.clear();
+                            sessionStorage.clear();
+                            
+                            Object.keys(values).forEach(k => {
+                                localStorage.setItem(k, values[k]);
+                            });
+                            
+                            alert('تنظیمات و حافظه مرورگر شما با موفقیت به صورت زنده پاکسازی شد. تغییرات بارگذاری شدند!');
+                            window.location.reload(true);
+                        }
+                        </script>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <?php else: ?>
+        <!-- ==================== MAIN HOME RENDER ==================== -->
+        <!-- Hero Header -->
+        <div class="hero">
+            <h2 style="color:#ff7597; font-size: 32px; margin:0 0 15px 0;">قدرتمندترین پورتال اختصاصی و زنده مانگاتا</h2>
+            <p style="color:#ccc; font-size:16px; max-width: 800px; margin: 0 auto; line-height:1.7;">
+                از وردپرس خارج شدیم! اکنون با یک معماری فوق‌العاده سریع و اختصاصی PHP مجهز به پایگاه‌داده واقعی <code style="background:#000; padding:2px 8px; border-radius:4px; color:#bb86fc;">mrvir111_mangata_db</code> به صورت تمام سینک با اپلیکیشن اندروید در خدمت شماییم.
+            </p>
+        </div>
 
     <?php echo $login_msg; ?>
     <?php echo $upload_msg; ?>
@@ -329,6 +653,48 @@ $mangas = $stmt->fetchAll();
 
     <!-- Active Manhwas Section -->
     <h2 id="manhwa" style="color:#ff7597; margin-top:40px; border-bottom: 2px solid #ff7597; padding-bottom:10px;">🎨 مانهوا‌های در حال انتشار پلتفرم</h2>
+
+    <!-- Dynamic Advanced Search & Filter Bar -->
+    <div class="card" style="margin-bottom: 30px; border: 1px solid rgba(187,134,252,0.25); background: rgba(30, 27, 36, 0.65); backdrop-filter: blur(8px); padding: 20px; border-radius: 12px;">
+        <h3 style="color:#bb86fc; margin-top:0; font-size:16px; margin-bottom:15px; display:flex; align-items:center; gap:8px;">🔍 جستجوی پیشرفته و فیلتر مانهوا</h3>
+        <form action="" method="GET" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; background:transparent; padding:0; border:none; width:100%;">
+            <!-- Text Search Input -->
+            <div>
+                <label style="display:block; color:#aaa; font-size:12px; margin-bottom:5px;">کلمه کلیدی (عنوان، سازنده، خلاصه...)</label>
+                <input type="text" name="search" value="<?php echo htmlspecialchars($search); ?>" placeholder="مثال: بازگشت، جین وو، چوگونگ..." style="width:100%; padding:8px 12px; border:1px solid #333; border-radius:8px; background:#111; color:#fff; font-size:13px; box-sizing:border-box;">
+            </div>
+            <!-- Genre Filter Input -->
+            <div>
+                <label style="display:block; color:#aaa; font-size:12px; margin-bottom:5px;">ژانر (اکشن، درام، کمدی...)</label>
+                <select name="genre" style="width:100%; padding:8px 12px; border:1px solid #333; border-radius:8px; background:#111; color:#fff; font-size:13px; box-sizing:border-box;">
+                    <option value="">همه ژانرها</option>
+                    <option value="اکشن" <?php echo $genre === 'اکشن' ? 'selected' : ''; ?>>اکشن</option>
+                    <option value="کمدی" <?php echo $genre === 'کمدی' ? 'selected' : ''; ?>>کمدی</option>
+                    <option value="درام" <?php echo $genre === 'درام' ? 'selected' : ''; ?>>درام</option>
+                    <option value="فانتزی" <?php echo $genre === 'فانتزی' ? 'selected' : ''; ?>>فانتزی</option>
+                    <option value="ماجراجویی" <?php echo $genre === 'ماجراجویی' ? 'selected' : ''; ?>>ماجراجویی</option>
+                    <option value="عاشقانه" <?php echo $genre === 'عاشقانه' ? 'selected' : ''; ?>>عاشقانه</option>
+                </select>
+            </div>
+            <!-- Release Year Filter Input -->
+            <div>
+                <label style="display:block; color:#aaa; font-size:12px; margin-bottom:5px;">سال انتشار</label>
+                <input type="text" name="year" value="<?php echo htmlspecialchars($year); ?>" placeholder="مثال: 2024" style="width:100%; padding:8px 12px; border:1px solid #333; border-radius:8px; background:#111; color:#fff; font-size:13px; box-sizing:border-box;">
+            </div>
+            <!-- Main character Filter Input -->
+            <div>
+                <label style="display:block; color:#aaa; font-size:12px; margin-bottom:5px;">بازیگر / شخصیت اصلی</label>
+                <input type="text" name="character" value="<?php echo htmlspecialchars($character); ?>" placeholder="مثال: سونگ ایل" style="width:100%; padding:8px 12px; border:1px solid #333; border-radius:8px; background:#111; color:#fff; font-size:13px; box-sizing:border-box;">
+            </div>
+            <!-- Buttons -->
+            <div style="display:flex; gap:10px; align-items:flex-end;">
+                <button type="submit" class="btn" style="background:#03dac6; color:#000; font-weight:bold; flex:1; height:38px; border-radius:8px;">جستجو 🚀</button>
+                <?php if (!empty($search) || !empty($genre) || !empty($year) || !empty($character)): ?>
+                    <a href="." class="btn" style="background:#b71c1c; color:#fff; text-decoration:none; text-align:center; flex:1; height:38px; line-height:38px; padding:0; display:block; border-radius:8px;">پاک کردن 🧹</a>
+                <?php endif; ?>
+            </div>
+        </form>
+    </div>
     
     <div class="manhwa-grid">
         <?php if (!empty($mangas)): ?>
@@ -488,6 +854,18 @@ $mangas = $stmt->fetchAll();
                         <label style="font-size:12px; font-weight:bold; color:#ff7597;">لینک تصویر آدرس کاور:</label>
                         <input type="text" name="manga_cover" placeholder="https://image-url" style="padding:8px; margin:5px 0 10px 0;">
 
+                        <label style="font-size:12px; font-weight:bold; color:#ff7597;">نویسنده / خالق اثر:</label>
+                        <input type="text" name="manga_author" placeholder="مثلاً چوگونگ" style="padding:8px; margin:5px 0 10px 0;">
+
+                        <label style="font-size:12px; font-weight:bold; color:#ff7597;">سال انتشار:</label>
+                        <input type="text" name="manga_release_year" placeholder="مثلاً 2024" style="padding:8px; margin:5px 0 10px 0;">
+
+                        <label style="font-size:12px; font-weight:bold; color:#ff7597;">ژانرها (جدا شده با کامای فارسی یا انگلیسی):</label>
+                        <input type="text" name="manga_genres" placeholder="مثلاً اکشن, فانتزی, درام" style="padding:8px; margin:5px 0 10px 0;">
+
+                        <label style="font-size:12px; font-weight:bold; color:#ff7597;">بازیگران / شخصیت‌های اصلی (جدا شده با کاما):</label>
+                        <input type="text" name="manga_main_characters" placeholder="مثلاً سونگ جین وو, چا هائه این" style="padding:8px; margin:5px 0 10px 0;">
+
                         <button type="submit" name="create_manhwa_web" class="btn btn-sm" style="background:#ff5722; width:100%; font-weight:bold;">ثبت و همگام‌سازی مانهوا</button>
                     </form>
                 </div>
@@ -576,10 +954,11 @@ $mangas = $stmt->fetchAll();
                 <table>
                     <thead>
                         <tr>
-                            <th>آیدی مانهوا</th>
-                            <th>عنوان اثر</th>
-                            <th>توضیحات کوتاه</th>
-                            <th>لینک کاور</th>
+                            <th>آیدی</th>
+                            <th>عنوان اثر و خالق</th>
+                            <th>توضیحات معرفی و شخصیت‌ها</th>
+                            <th>لینک کاور و سال تولید</th>
+                            <th>ژانرها</th>
                             <th>عملیات ویرایش / حذف</th>
                         </tr>
                     </thead>
@@ -592,13 +971,19 @@ $mangas = $stmt->fetchAll();
                                 <form action="" method="POST" style="margin:0; padding:0; background:transparent; border:none; display:contents;">
                                     <input type="hidden" name="edit_manga_id" value="<?php echo $man['id']; ?>">
                                     <td>
-                                        <input type="text" name="manga_title" value="<?php echo htmlspecialchars($man['title']); ?>" required style="margin:0; padding:6px; font-size:12px; border-radius:6px; background:#111; color:#fff; border:1px solid #333;">
+                                        <input type="text" name="manga_title" value="<?php echo htmlspecialchars($man['title']); ?>" required style="margin-bottom:5px; padding:6px; font-size:12px; border-radius:6px; background:#111; color:#fff; border:1px solid #333; width:100%;" placeholder="عنوان">
+                                        <input type="text" name="manga_author" value="<?php echo htmlspecialchars($man['author'] ?? ''); ?>" style="padding:6px; font-size:12px; border-radius:6px; background:#111; color:#fff; border:1px solid #333; width:100%;" placeholder="خالق/نویسنده">
                                     </td>
                                     <td>
-                                        <textarea name="manga_desc" required style="margin:0; padding:6px; font-size:12px; height:50px; width:100%; min-width:180px; border-radius:6px; background:#111; color:#fff; border:1px solid #333; font-family:inherit;"><?php echo htmlspecialchars($man['description']); ?></textarea>
+                                        <textarea name="manga_desc" required style="margin-bottom:5px; padding:6px; font-size:12px; height:50px; width:100%; min-width:180px; border-radius:6px; background:#111; color:#fff; border:1px solid #333; font-family:inherit;" placeholder="خلاصه داستان"><?php echo htmlspecialchars($man['description']); ?></textarea>
+                                        <input type="text" name="manga_main_characters" value="<?php echo htmlspecialchars($man['main_characters'] ?? ''); ?>" style="padding:6px; font-size:12px; border-radius:6px; background:#111; color:#fff; border:1px solid #333; width:100%;" placeholder="بازیگران/شخصیت‌ها">
                                     </td>
                                     <td>
-                                        <input type="text" name="manga_cover" value="<?php echo htmlspecialchars($man['cover_image']); ?>" style="margin:0; padding:6px; font-size:12px; width:100%; border-radius:6px; background:#111; color:#fff; border:1px solid #333;">
+                                        <input type="text" name="manga_cover" value="<?php echo htmlspecialchars($man['cover_image']); ?>" style="margin-bottom:5px; padding:6px; font-size:12px; width:100%; border-radius:6px; background:#111; color:#fff; border:1px solid #333;" placeholder="لینک کاور">
+                                        <input type="text" name="manga_release_year" value="<?php echo htmlspecialchars($man['release_year'] ?? ''); ?>" style="padding:6px; font-size:12px; width:100%; border-radius:6px; background:#111; color:#fff; border:1px solid #333;" placeholder="سال انتشار">
+                                    </td>
+                                    <td>
+                                        <input type="text" name="manga_genres" value="<?php echo htmlspecialchars($man['genres'] ?? ''); ?>" style="padding:6px; font-size:12px; width:100%; border-radius:6px; background:#111; color:#fff; border:1px solid #333;" placeholder="ژانرها">
                                     </td>
                                     <td>
                                         <div style="display:flex; gap:10px; justify-content:center;">
@@ -619,7 +1004,7 @@ $mangas = $stmt->fetchAll();
             </div>
 
             <!-- Manage Users Panel -->
-            <h3 style="color:#ff5722; margin-top:40px; margin-bottom:15px; font-size:18px;">👤 مدیریت تمام کاربران و تغییر نقش دسترسی:</h3>
+            <h3 style="color:#ff5722; margin-top:40px; margin-bottom:15px; font-size:18px;">👤 مدیریت تمام کاربران و تغییر مشخصات و رمزعبور:</h3>
             <div style="overflow-x:auto;">
                 <table>
                     <thead>
@@ -627,9 +1012,9 @@ $mangas = $stmt->fetchAll();
                             <th>شناسه</th>
                             <th>نام کاربری</th>
                             <th>ایمیل</th>
-                            <th>نقش دسترسی فعلی</th>
-                            <th>تغییر نقش</th>
-                            <th>عملیات حساب</th>
+                            <th>رمز عبور جدید</th>
+                            <th>نقش دسترسی</th>
+                            <th>عملیات بروزرسانی</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -639,42 +1024,95 @@ $mangas = $stmt->fetchAll();
                         foreach ($all_users as $usr): ?>
                             <tr>
                                 <td style="text-align:center;"><code><?php echo $usr['id']; ?></code></td>
-                                <td><strong><?php echo htmlspecialchars($usr['username']); ?></strong></td>
-                                <td><?php echo htmlspecialchars($usr['email']); ?></td>
-                                <td style="text-align:center;">
-                                    <span class="badge" style="background: #3f51b5; color:#fff; padding:4px 8px; border-radius:6px; font-size:11px;"><?php echo htmlspecialchars($usr['role']); ?></span>
-                                </td>
-                                <td>
-                                    <form action="" method="POST" style="display:flex; justify-content:center; gap:10px; margin:0; padding:0; background:transparent; border:none; width:100%;">
-                                        <input type="hidden" name="target_user_id" value="<?php echo $usr['id']; ?>">
-                                        <select name="target_role" style="margin:0; padding:5px; font-size:12px; width:140px; background:#111; color:#fff; border:1px solid #333; border-radius:6px; text-align:center;">
+                                <form action="" method="POST" style="display:contents; margin:0; padding:0; background:transparent; border:none;">
+                                    <input type="hidden" name="target_user_id" value="<?php echo $usr['id']; ?>">
+                                    <td>
+                                        <input type="text" name="target_username" value="<?php echo htmlspecialchars($usr['username']); ?>" required style="margin:0; padding:6px; font-size:12px; border-radius:6px; background:#111; color:#fff; border:1px solid #333; max-width:110px;">
+                                    </td>
+                                    <td>
+                                        <input type="email" name="target_email" value="<?php echo htmlspecialchars($usr['email']); ?>" required style="margin:0; padding:6px; font-size:12px; border-radius:6px; background:#111; color:#fff; border:1px solid #333; max-width:150px;">
+                                    </td>
+                                    <td>
+                                        <input type="text" name="target_password" placeholder="تغییر پسورد (یا خالی)" style="margin:0; padding:6px; font-size:12px; border-radius:6px; background:#111; color:#ccc; border:1px solid #333; max-width:130px;">
+                                    </td>
+                                    <td style="text-align:center;">
+                                        <select name="target_role" style="margin:0; padding:5px; font-size:12px; width:130px; background:#111; color:#fff; border:1px solid #333; border-radius:6px; text-align:center;">
                                             <option value="subscriber" <?php echo $usr['role'] === 'subscriber' ? 'selected' : ''; ?>>کاربر عادی (Subscriber)</option>
                                             <option value="administrator" <?php echo $usr['role'] === 'administrator' ? 'selected' : ''; ?>>مدیر کل (Administrator)</option>
-                                            <option value="staff_translator" <?php echo $usr['role'] === 'staff_translator' ? 'selected' : ''; ?>>مترجم تیم (Translator)</option>
-                                            <option value="staff_redrawer" <?php echo $usr['role'] === 'staff_redrawer' ? 'selected' : ''; ?>>طراح تیم (Redrawer)</option>
-                                            <option value="staff_cleaner" <?php echo $usr['role'] === 'staff_cleaner' ? 'selected' : ''; ?>>پاک کننده (Cleaner)</option>
+                                            <option value="staff_translator" <?php echo $usr['role'] === 'staff_translator' ? 'selected' : ''; ?>>مترجم (Translator)</option>
+                                            <option value="staff_redrawer" <?php echo $usr['role'] === 'staff_redrawer' ? 'selected' : ''; ?>>طراح (Redrawer)</option>
+                                            <option value="staff_cleaner" <?php echo $usr['role'] === 'staff_cleaner' ? 'selected' : ''; ?>>کلینر (Cleaner)</option>
                                             <option value="staff_ts" <?php echo $usr['role'] === 'staff_ts' ? 'selected' : ''; ?>>تایپ‌ستر (Typesetter)</option>
                                         </select>
-                                        <button type="submit" name="update_user_role_web" class="btn btn-sm" style="background:#03dac6; color:#000; font-weight:bold; border-radius:6px; padding:6px 10px;">بزن ⚡</button>
-                                    </form>
-                                </td>
-                                <td style="text-align:center;">
-                                    <?php if ($usr['id'] != $_SESSION['user_id']): ?>
-                                        <form action="" method="POST" style="margin:0; padding:0; background:transparent; border:none;" onsubmit="return confirm('آیا از حذف دائم این حساب حساب مطمئن هستید؟');">
-                                            <input type="hidden" name="target_user_id" value="<?php echo $usr['id']; ?>">
-                                            <button type="submit" name="delete_user_web" class="btn btn-sm" style="background:#b71c1c; font-weight:bold; padding: 6px 12px; border-radius:6px;">حذف کاربر 🗑️</button>
-                                        </form>
-                                    <?php else: ?>
-                                        <span style="color:#ef5350; font-size:11px; font-weight:bold;">(شما)</span>
-                                    <?php endif; ?>
-                                </td>
+                                    </td>
+                                    <td style="text-align:center;">
+                                        <div style="display:flex; gap:6px; justify-content:center; align-items:center;">
+                                            <button type="submit" name="update_user_full_web" class="btn btn-sm" style="background:#03dac6; color:#000; font-weight:bold; border-radius:6px; padding:6px 12px;">ذخیره ⚡</button>
+                                </form>
+                                            <?php if ($usr['id'] != $_SESSION['user_id']): ?>
+                                                <form action="" method="POST" style="margin:0; padding:0; background:transparent; border:none; display:inline;" onsubmit="return confirm('آیا از حذف دائم این حساب حساب مطمئن هستید؟');">
+                                                    <input type="hidden" name="target_user_id" value="<?php echo $usr['id']; ?>">
+                                                    <button type="submit" name="delete_user_web" class="btn btn-sm" style="background:#b71c1c; font-weight:bold; padding: 6px 12px; border-radius:6px;">حذف 🗑️</button>
+                                                </form>
+                                            <?php else: ?>
+                                                <span style="color:#ef5350; font-size:11px; font-weight:bold;">(شما)</span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
 
+            <!-- Manage Force Updates Panel -->
+            <h3 style="color:#ff5722; margin-top:40px; margin-bottom:15px; font-size:18px;">🔄 پنل کنترل آپدیت اجباری کاربری (وب‌سایت و اپلیکیشن):</h3>
+            <p style="color:#aaa; font-size:12px; margin-bottom:15px; line-height:1.7;">در این بخش به عنوان مدیریت کل می‌توانید با فعال‌سازی آپدیت اجباری، یک نوتیفیکیشن مسدودکننده در وبسایت یا اپلیکیشن ایجاد کنید تا زمانی‌که کاربر با کلیک روی آن دارایی‌های خود را بروز نکند، قادر به استفاده از امکانات سایت نباشد.</p>
+            
+            <form action="" method="POST" style="background:#201c24; padding:20px; border-radius:12px; border:1px solid rgba(187,134,252,0.2); display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:20px; margin-bottom:30px;">
+                <!-- App section -->
+                <div style="background:rgba(255,255,255,0.03); padding:15px; border-radius:8px; border:1px solid #333;">
+                    <h4 style="color:#bb86fc; margin-top:0; font-size:14px; border-bottom:1px solid #333; padding-bottom:8px;">📱 آپدیت اجباری اپلیکیشن اندروید</h4>
+                    
+                    <label style="display:block; font-size:12px; color:#aaa; margin-bottom:5px;">وضعیت آپدیت اجباری اپلیکیشن:</label>
+                    <select name="force_update_app_active" style="width:100%; padding:8px; background:#111; color:#fff; border:1px solid #444; border-radius:6px; margin-bottom:12px;">
+                        <option value="0" <?php echo get_mangata_setting('force_update_app_active', '0') === '0' ? 'selected' : ''; ?>>❌ غیرفعال (کاربران بدون مانع استفاده کنند)</option>
+                        <option value="1" <?php echo get_mangata_setting('force_update_app_active', '0') === '1' ? 'selected' : ''; ?>>⚠️ فعال و مسدودکننده (کاربر باید دانلود کند)</option>
+                    </select>
+
+                    <label style="display:block; font-size:12px; color:#aaa; margin-bottom:5px;">لینک مستقیم دانلود نسخه جدید اپلیکیشن (APK):</label>
+                    <input type="url" name="force_update_app_url" value="<?php echo htmlspecialchars(get_mangata_setting('force_update_app_url', 'https://mr-v.ir/')); ?>" required style="width:100%; padding:8px; background:#111; color:#fff; border:1px solid #444; border-radius:6px; margin-bottom:12px; box-sizing:border-box;">
+
+                    <label style="display:block; font-size:12px; color:#aaa; margin-bottom:5px;">پیام خطای آپدیت اجباری برای کاربران اپلیکیشن:</label>
+                    <textarea name="force_update_app_msg" style="width:100%; height:80px; padding:8px; background:#111; color:#fff; border:1px solid #444; border-radius:6px; box-sizing:border-box;"><?php echo htmlspecialchars(get_mangata_setting('force_update_app_msg', 'نسخه جدید و حیاتی اپلیکیشن مانگاتا آماده دریافت است. لطفا جهت دسترسی مجدد به امکانات برنامه آن را به روز رسانی کنید.')); ?></textarea>
+                </div>
+
+                <!-- Web section -->
+                <div style="background:rgba(255,255,255,0.03); padding:15px; border-radius:8px; border:1px solid #333;">
+                    <h4 style="color:#03dac6; margin-top:0; font-size:14px; border-bottom:1px solid #333; padding-bottom:8px;">🌐 آپدیت اجباری وب‌سایت (ریست کش خودکار)</h4>
+                    
+                    <label style="display:block; font-size:12px; color:#aaa; margin-bottom:5px;">وضعیت آپدیت اجباری وب‌سایت:</label>
+                    <select name="force_update_web_active" style="width:100%; padding:8px; background:#111; color:#fff; border:1px solid #444; border-radius:6px; margin-bottom:12px;">
+                        <option value="0" <?php echo get_mangata_setting('force_update_web_active', '0') === '0' ? 'selected' : ''; ?>>❌ غیرفعال (کاربران بدون مانع استفاده کنند)</option>
+                        <option value="1" <?php echo get_mangata_setting('force_update_web_active', '0') === '1' ? 'selected' : ''; ?>>⚠️ فعال و مسدودکننده (کاربر باید کش را پاکسازی کند)</option>
+                    </select>
+
+                    <label style="display:block; font-size:12px; color:#aaa; margin-bottom:5px;">شماره نسخه دارایی‌های کش وب (Web Version Identifier):</label>
+                    <input type="text" name="force_update_web_version" value="<?php echo htmlspecialchars(get_mangata_setting('force_update_web_version', '1')); ?>" required style="width:100%; padding:8px; background:#111; color:#fff; border:1px solid #444; border-radius:6px; margin-bottom:12px; box-sizing:border-box;">
+
+                    <label style="display:block; font-size:12px; color:#aaa; margin-bottom:5px;">پیام اطلاع‌رسانی آپدیت و پاکسازی کش وب‌سایت:</label>
+                    <textarea name="force_update_web_msg" style="width:100%; height:80px; padding:8px; background:#111; color:#fff; border:1px solid #444; border-radius:6px; box-sizing:border-box;"><?php echo htmlspecialchars(get_mangata_setting('force_update_web_msg', 'به‌روزرسانی مهمی برای وب‌سایت مانگاتا در دیتابیس ثبت شده است. جهت ارتقاء ثبات سیستم، تمیزکننده عمیق کش و دارایی‌ها را اجرا کنید.')); ?></textarea>
+                </div>
+
+                <!-- Submit Button -->
+                <div style="grid-column: 1 / -1; text-align:center;">
+                    <button type="submit" name="update_mangata_settings" class="btn" style="background:#ff5722; color:#fff; font-weight:bold; width:100%; padding:12px; border-radius:8px; cursor:pointer; border:none;">💾 ثبت تغییرات و اعمال فرمان زنده آپدیت اجباری در تمام سطوح</button>
+                </div>
+            </form>
+
         </div>
+    <?php endif; ?>
+
     <?php endif; ?>
 
 </div>

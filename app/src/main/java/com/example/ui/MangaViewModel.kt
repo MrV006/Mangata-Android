@@ -37,12 +37,43 @@ class MangaViewModel(application: Application) : AndroidViewModel(application) {
     private val _successMessage = MutableStateFlow<String?>(null)
     val successMessage: StateFlow<String?> = _successMessage.asStateFlow()
 
+    private val _appSettings = MutableStateFlow<AppSettingsResponse?>(null)
+    val appSettings: StateFlow<AppSettingsResponse?> = _appSettings.asStateFlow()
+
+    private val _isForceUpdateRequired = MutableStateFlow(false)
+    val isForceUpdateRequired: StateFlow<Boolean> = _isForceUpdateRequired.asStateFlow()
+
     init {
         // Load persist user session first
         viewModelScope.launch {
             _currentUser.value = repository.getCurrentUser()
             checkActiveSession()
+            fetchSettingsAndCheckUpdate()
             fetchManhwas()
+        }
+    }
+
+    fun fetchSettingsAndCheckUpdate() {
+        viewModelScope.launch {
+            val result = repository.getAppSettings()
+            if (result.isSuccess) {
+                val data = result.getOrNull()
+                _appSettings.value = data
+                if (data != null) {
+                    val isForceActive = data.forceUpdateAppActive == "1"
+                    _isForceUpdateRequired.value = isForceActive
+                }
+            }
+        }
+    }
+
+    fun clearAppCache() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            repository.clearMangaCache()
+            fetchManhwas() // Re-fetch from DB directly
+            _isLoading.value = false
+            _successMessage.value = "حافظه موقت کش برنامه با موفقیت تخلیه شد. اطلاعات با دیتابیس زنده همگام‌سازی گردید."
         }
     }
 
@@ -133,7 +164,12 @@ class MangaViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Manga & Chapter Actions
-    fun fetchManhwas() {
+    fun fetchManhwas(
+        search: String? = null,
+        genre: String? = null,
+        year: String? = null,
+        character: String? = null
+    ) {
         viewModelScope.launch {
             _currentUser.value?.let { user ->
                 user.token?.let { token ->
@@ -148,7 +184,7 @@ class MangaViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             _isLoading.value = true
-            val result = repository.getManhwas()
+            val result = repository.getManhwas(search, genre, year, character)
             _isLoading.value = false
             if (result.isSuccess) {
                 _mangas.value = result.getOrNull() ?: emptyList()

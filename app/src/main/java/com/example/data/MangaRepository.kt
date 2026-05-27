@@ -105,16 +105,33 @@ class MangaRepository(private val db: MangaDatabase) {
     }
 
     // 2. Fetch Manhwas (Syncing Network with Database cache)
-    suspend fun getManhwas(): Result<List<MangaItem>> {
+    suspend fun getManhwas(
+        search: String? = null,
+        genre: String? = null,
+        year: String? = null,
+        character: String? = null
+    ): Result<List<MangaItem>> {
         return try {
-            val response = api.getManhwas()
+            val response = api.getManhwas(search, genre, year, character)
             if (response.status == "success" && response.data != null) {
                 // Populate local db cache
                 val entities = response.data.map {
-                    MangaEntity(it.id, it.title, it.description, it.coverImage, it.createdAt)
+                    MangaEntity(
+                        id = it.id,
+                        title = it.title,
+                        description = it.description,
+                        coverImage = it.coverImage,
+                        createdAt = it.createdAt,
+                        genres = it.genres,
+                        releaseYear = it.releaseYear,
+                        mainCharacters = it.mainCharacters,
+                        author = it.author
+                    )
                 }
-                dao.clearMangaCache()
-                dao.cacheMangas(entities)
+                if (search == null && genre == null && year == null && character == null) {
+                    dao.clearMangaCache()
+                    dao.cacheMangas(entities)
+                }
                 Result.success(response.data)
             } else {
                 Result.failure(Exception("خطا در بارگذاری لیست مانهواها از سایت."))
@@ -124,9 +141,26 @@ class MangaRepository(private val db: MangaDatabase) {
             val cached = dao.getCachedMangas()
             if (cached.isNotEmpty()) {
                 val items = cached.map {
-                    MangaItem(it.id, it.title, it.description, it.coverImage, it.createdAt)
+                    MangaItem(
+                        id = it.id,
+                        title = it.title,
+                        description = it.description,
+                        coverImage = it.coverImage,
+                        createdAt = it.createdAt,
+                        genres = it.genres,
+                        releaseYear = it.releaseYear,
+                        mainCharacters = it.mainCharacters,
+                        author = it.author
+                    )
                 }
-                Result.success(items)
+                val filtered = items.filter { item ->
+                    val matchSearch = search == null || item.title.contains(search, ignoreCase = true) || item.description.contains(search, ignoreCase = true) || (item.author != null && item.author.contains(search, ignoreCase = true))
+                    val matchGenre = genre == null || (item.genres != null && item.genres.contains(genre, ignoreCase = true))
+                    val matchYear = year == null || item.releaseYear == year
+                    val matchChar = character == null || (item.mainCharacters != null && item.mainCharacters.contains(character, ignoreCase = true))
+                    matchSearch && matchGenre && matchYear && matchChar
+                }
+                Result.success(filtered)
             } else {
                 Result.failure(Exception("عدم دسترسی به شبکه و اطلاعات کَش شده."))
             }
@@ -260,5 +294,25 @@ class MangaRepository(private val db: MangaDatabase) {
         } catch (e: Exception) {
             Result.failure(Exception("خطا در برقراری ارتباط با پلتفرم تیم ترجمه: " + e.localizedMessage))
         }
+    }
+
+    // 10. Get App Settings (for Force Update)
+    suspend fun getAppSettings(): Result<AppSettingsResponse> {
+        return try {
+            val response = api.getSettings()
+            if (response.status == "success" && response.data != null) {
+                Result.success(response.data)
+            } else {
+                Result.failure(Exception(response.message ?: "خطا در بارگذاری تنظیمات."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // 11. Clear Manga Cache safely (excluding user profile)
+    suspend fun clearMangaCache() {
+        dao.clearMangaCache()
+        dao.clearChapterCache()
     }
 }

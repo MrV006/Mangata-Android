@@ -23,8 +23,16 @@ interface MangaApiService {
         @Query("token") token: String
     ): ApiResponse<SessionValidResponse>
 
+    @GET("settings/get")
+    suspend fun getSettings(): ApiResponse<AppSettingsResponse>
+
     @GET("manhwa/list")
-    suspend fun getManhwas(): ApiResponse<List<MangaItem>>
+    suspend fun getManhwas(
+        @Query("search") search: String? = null,
+        @Query("genre") genre: String? = null,
+        @Query("year") year: String? = null,
+        @Query("character") character: String? = null
+    ): ApiResponse<List<MangaItem>>
 
     @POST("manhwa/create")
     suspend fun createManhwa(

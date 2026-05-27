@@ -9,7 +9,11 @@ data class MangaEntity(
     val title: String,
     val description: String,
     val coverImage: String?,
-    val createdAt: String
+    val createdAt: String,
+    val genres: String? = null,
+    val releaseYear: String? = null,
+    val mainCharacters: String? = null,
+    val author: String? = null
 )
 
 @Entity(tableName = "chapter_cache")

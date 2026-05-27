@@ -13,12 +13,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -55,6 +57,52 @@ class MainActivity : ComponentActivity() {
                 
                 val errorMessage by viewModel.errorMessage.collectAsState()
                 val successMessage by viewModel.successMessage.collectAsState()
+
+                val isForceUpdateRequired by viewModel.isForceUpdateRequired.collectAsState()
+                val appSettings by viewModel.appSettings.collectAsState()
+
+                // Enforced Update Blocking Modal
+                if (isForceUpdateRequired && currentUser?.role != "administrator") {
+                    AlertDialog(
+                        onDismissRequest = { /* Force update cannot be dismissed */ },
+                        title = {
+                            Text(
+                                text = "🔄 بروزرسانی اجباری برنامه",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 18.sp
+                            )
+                        },
+                        text = {
+                            Text(
+                                text = appSettings?.forceUpdateAppMsg ?: "نسخه جدید و حیاتی اپلیکیشن آماده دریافت است. لطفا جهت استفاده مجدد از امکانات برنامه آن را بروزرسانی کنید.",
+                                fontSize = 14.sp,
+                                color = Color.White,
+                                lineHeight = 22.sp
+                            )
+                        },
+                        confirmButton = {
+                            val context = androidx.compose.ui.platform.LocalContext.current
+                            Button(
+                                onClick = {
+                                    val url = appSettings?.forceUpdateAppUrl ?: "https://mr-v.ir/"
+                                    try {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "خطا در باز کردن مرورگر جهت دانلود.", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Text("دانلود و نصب نسخه جدید 📥", color = Color.Black, fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        dismissButton = null,
+                        containerColor = Color(0xFF1E1B24),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
 
                 // State Navigation
                 var currentScreen by remember { mutableStateOf("home") } // "home", "recruitment", "staff", "admin"
@@ -152,7 +200,16 @@ class MainActivity : ComponentActivity() {
                                             selectedMangaForDetails = manga
                                             viewModel.fetchChapters(manga.id)
                                         },
-                                        onLogout = { viewModel.logout() }
+                                        onLogout = { viewModel.logout() },
+                                        onTriggerCacheClear = { viewModel.clearAppCache() },
+                                        onSearch = { search, genre, year, character ->
+                                            viewModel.fetchManhwas(
+                                                search = search.takeIf { !it.isNullOrBlank() },
+                                                genre = genre.takeIf { !it.isNullOrBlank() },
+                                                year = year.takeIf { !it.isNullOrBlank() },
+                                                character = character.takeIf { !it.isNullOrBlank() }
+                                            )
+                                        }
                                     )
                                 }
                             }
@@ -521,8 +578,19 @@ fun HomeScreenContent(
     onNavigateToStaff: () -> Unit,
     onNavigateToAdmin: () -> Unit,
     onSelectManga: (MangaItem) -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onTriggerCacheClear: () -> Unit,
+    onSearch: (String?, String?, String?, String?) -> Unit
 ) {
+    var searchText by remember { mutableStateOf("") }
+    var selectedGenre by remember { mutableStateOf("") }
+    var selectedYear by remember { mutableStateOf("") }
+    var selectedCharacter by remember { mutableStateOf("") }
+    var isFilterExpanded by remember { mutableStateOf(false) }
+
+    val genres = listOf("اکشن", "کمدی", "درام", "فانتزی", "ماجراجویی", "عاشقانه")
+    var isGenreDropdownExpanded by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             Box(
@@ -607,6 +675,267 @@ fun HomeScreenContent(
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(imageVector = Icons.Default.Settings, contentDescription = "Admin", tint = Color.White, modifier = Modifier.size(16.dp))
                                 Text("پنل ادمین کل", color = Color.White, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 👤 USER PROFILE & CACHE SYNC CARD
+            item {
+                var isProfileExpanded by remember { mutableStateOf(false) }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B24)),
+                    border = BorderStroke(1.dp, Color(0xFFBB86FC).copy(alpha = 0.3f))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isProfileExpanded = !isProfileExpanded },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AccountBox,
+                                    contentDescription = "Profile",
+                                    tint = Color(0xFFBB86FC),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Text(
+                                    text = "👤 پروفایل کاربری من و بهینه سازی کش",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = Color.White
+                                )
+                            }
+                            Icon(
+                                imageVector = if (isProfileExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Toggle",
+                                tint = Color.Gray
+                            )
+                        }
+
+                        if (isProfileExpanded) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Divider(color = Color.White.copy(alpha = 0.1f))
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Text(
+                                text = "نام کاربری شما: $username",
+                                fontSize = 13.sp,
+                                color = Color.LightGray,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
+                            Text(
+                                text = "سطح دسترسی شما در پلتفرم: ${translateRole(userRole)}",
+                                fontSize = 13.sp,
+                                color = Color.LightGray,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+
+                            Button(
+                                onClick = onTriggerCacheClear,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("button_update_app_cache"),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF03DAC6))
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "Sync",
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "بروزرسانی برنامه و بازنشانی کامل حافظه کش 🔄",
+                                        color = Color.Black,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Advanced Search & Filter Panel
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.04f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "🔍 جستجوی پیشرفته مانهوا",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        // Search Text Field
+                        OutlinedTextField(
+                            value = searchText,
+                            onValueChange = { searchText = it },
+                            placeholder = { Text("جستجو کنید (عنوان، خلاصه اثر، نویسنده...)", fontSize = 12.sp) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Filters expand toggle button
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { isFilterExpanded = !isFilterExpanded }) {
+                                Text(
+                                    text = if (isFilterExpanded) "◀ بستن ابزارهای فیلتر" else "▼ نمایش ابزارهای فیلتر تخصصی",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                        }
+
+                        // Collapsible Filter Panel
+                        AnimatedVisibility(visible = isFilterExpanded) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                // Genre Dropdown
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedButton(
+                                        onClick = { isGenreDropdownExpanded = true },
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = if (selectedGenre.isEmpty()) "📂 انتخاب ژانر" else "ژانر: $selectedGenre",
+                                            fontSize = 12.sp,
+                                            color = Color.LightGray
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = isGenreDropdownExpanded,
+                                        onDismissRequest = { isGenreDropdownExpanded = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("همه ژانرها") },
+                                            onClick = {
+                                                selectedGenre = ""
+                                                isGenreDropdownExpanded = false
+                                            }
+                                        )
+                                        genres.forEach { g ->
+                                            DropdownMenuItem(
+                                                text = { Text(g) },
+                                                onClick = {
+                                                    selectedGenre = g
+                                                    isGenreDropdownExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    // Year input
+                                    OutlinedTextField(
+                                        value = selectedYear,
+                                        onValueChange = { selectedYear = it },
+                                        placeholder = { Text("سال انتشار (مثال: 2024)", fontSize = 11.sp) },
+                                        singleLine = true,
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                            unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White
+                                        ),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f)
+                                    )
+
+                                    // Author/Character input
+                                    OutlinedTextField(
+                                        value = selectedCharacter,
+                                        onValueChange = { selectedCharacter = it },
+                                        placeholder = { Text("شخصیت اصلی", fontSize = 11.sp) },
+                                        singleLine = true,
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                            unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White
+                                        ),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1.1f)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Search and Clear buttons row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    onSearch(
+                                        searchText.takeIf { it.isNotEmpty() },
+                                        selectedGenre.takeIf { it.isNotEmpty() },
+                                        selectedYear.takeIf { it.isNotEmpty() },
+                                        selectedCharacter.takeIf { it.isNotEmpty() }
+                                    )
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Text("اعمال جستجو 🚀", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            if (searchText.isNotEmpty() || selectedGenre.isNotEmpty() || selectedYear.isNotEmpty() || selectedCharacter.isNotEmpty()) {
+                                Button(
+                                    onClick = {
+                                        searchText = ""
+                                        selectedGenre = ""
+                                        selectedYear = ""
+                                        selectedCharacter = ""
+                                        onSearch(null, null, null, null)
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.2f))
+                                ) {
+                                    Text("پاک کردن 🧹", color = Color.White, fontSize = 11.sp)
+                                }
                             }
                         }
                     }

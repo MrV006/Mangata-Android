@@ -6,6 +6,11 @@
 
 require_once __DIR__ . '/config.php';
 
+if (!is_logged_in()) {
+    header("Location: index.php");
+    exit;
+}
+
 $chapter_id = isset($_GET['chapter_id']) ? (int)$_GET['chapter_id'] : 0;
 
 if ($chapter_id <= 0) {
@@ -27,6 +32,8 @@ $stmt->execute([$chap['manga_id']]);
 $manga_title = $stmt->fetchColumn() ?: "مانهوا";
 
 $images = json_decode($chap['images_json'], true) ?: [];
+// Ensure 100% natural numeric sort on image filenames (e.g., 1.png, 2.png, 10.png)
+usort($images, 'strnatcasecmp');
 
 // Find neighboring chapters for DB-connected navigation
 $manga_id = (int)$chap['manga_id'];

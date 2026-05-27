@@ -49,9 +49,28 @@ function mangata_init_database($pdo) {
         title varchar(255) NOT NULL,
         description text NOT NULL,
         cover_image varchar(255) DEFAULT '' NOT NULL,
+        genres varchar(255) DEFAULT '' NOT NULL,
+        release_year varchar(50) DEFAULT '' NOT NULL,
+        main_characters text DEFAULT NULL,
+        author varchar(255) DEFAULT '' NOT NULL,
         created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
         PRIMARY KEY (id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
+    // Alter table to add columns for existing database
+    $cols = [
+        'genres' => "varchar(255) DEFAULT '' NOT NULL",
+        'release_year' => "varchar(50) DEFAULT '' NOT NULL",
+        'main_characters' => "text DEFAULT NULL",
+        'author' => "varchar(255) DEFAULT '' NOT NULL"
+    ];
+    foreach ($cols as $col_name => $col_definition) {
+        try {
+            $pdo->exec("ALTER TABLE mangata_mangas ADD COLUMN $col_name $col_definition;");
+        } catch (Exception $e) {
+            // Safe to ignore if column already exists
+        }
+    }
 
     // 3. Chapters Table
     $pdo->exec("CREATE TABLE IF NOT EXISTS mangata_chapters (
@@ -86,6 +105,31 @@ function mangata_init_database($pdo) {
         role varchar(100) NOT NULL,
         PRIMARY KEY (id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
+    // 6. Settings Table for global options (e.g. force updates)
+    $pdo->exec("CREATE TABLE IF NOT EXISTS mangata_settings (
+        setting_key varchar(100) NOT NULL UNIQUE,
+        setting_value text NOT NULL,
+        PRIMARY KEY (setting_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
+    // Seed default settings if empty
+    $default_settings = [
+        'force_update_app_active' => '0',
+        'force_update_app_url' => 'https://mr-v.ir/',
+        'force_update_app_msg' => 'نسخه جدید و حیاتی اپلیکیشن مانگاتا آماده دریافت است. لطفا جهت دسترسی مجدد به امکانات برنامه آن را به روز رسانی کنید.',
+        'force_update_web_active' => '0',
+        'force_update_web_version' => '1',
+        'force_update_web_msg' => 'به‌روزرسانی مهمی برای وب‌سایت مانگاتا در دیتابیس ثبت شده است. جهت ارتقاء ثبات سیستم، تمیزکننده عمیق کش و دارایی‌ها را اجرا کنید.'
+    ];
+    foreach ($default_settings as $s_key => $s_val) {
+        $stmt_set = $pdo->prepare("SELECT COUNT(*) FROM mangata_settings WHERE setting_key = ?");
+        $stmt_set->execute([$s_key]);
+        if ($stmt_set->fetchColumn() == 0) {
+            $ins_set = $pdo->prepare("INSERT INTO mangata_settings (setting_key, setting_value) VALUES (?, ?)");
+            $ins_set->execute([$s_key, $s_val]);
+        }
+    }
 
     // Seed default admin account if none exists
     $stmt = $pdo->query("SELECT COUNT(*) FROM mangata_users WHERE role = 'administrator'");
@@ -148,4 +192,26 @@ function get_current_user_id() {
 
 function is_admin() {
     return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'administrator';
+}
+
+function get_mangata_setting($key, $default = '') {
+    global $pdo;
+    try {
+        $stmt = $pdo->prepare("SELECT setting_value FROM mangata_settings WHERE setting_key = ?");
+        $stmt->execute([$key]);
+        $val = $stmt->fetchColumn();
+        return $val !== false ? $val : $default;
+    } catch (Exception $e) {
+        return $default;
+    }
+}
+
+function set_mangata_setting($key, $value) {
+    global $pdo;
+    try {
+        $stmt = $pdo->prepare("INSERT INTO mangata_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?");
+        return $stmt->execute([$key, $value, $value]);
+    } catch (Exception $e) {
+        return false;
+    }
 }

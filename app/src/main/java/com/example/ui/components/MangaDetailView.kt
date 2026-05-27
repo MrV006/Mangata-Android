@@ -45,16 +45,6 @@ fun MangaDetailView(
 ) {
     var isDescExpanded by remember { mutableStateOf(false) }
 
-    // Generates a mock list of translation staff for realistic and rich feeling
-    val mockStaff = remember {
-        listOf(
-            "مترجم پروژه" to "امیررضا (smaali)",
-            "ادیتور و طراح" to "علی‌اکبر (AliAK_ED)",
-            "کلینر اختصاصی" to "محمدپور (Zmohammadpoor97)",
-            "تایپستر رسمی" to "امیر یونیک (amiruniqe)"
-        )
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -173,6 +163,24 @@ fun MangaDetailView(
                                 lineHeight = 28.sp
                             )
 
+                            if (!manga.author.isNullOrBlank()) {
+                                Text(
+                                    text = "سازنده / نویسنده: ${manga.author}",
+                                    color = Color(0xFFFF7597),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            if (!manga.genres.isNullOrBlank()) {
+                                Text(
+                                    text = "ژانرها: ${manga.genres}",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
+
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -181,11 +189,21 @@ fun MangaDetailView(
                                 Text("امتیاز کاربری: 9.8 / 10", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
 
+                            val yearLabel = if (!manga.releaseYear.isNullOrBlank()) "سال ${manga.releaseYear}" else manga.createdAt.take(10)
                             Text(
-                                text = "منتشر شده در: " + manga.createdAt.take(10),
+                                text = "انتشار: $yearLabel",
                                 color = Color.Gray,
                                 fontSize = 11.sp
                             )
+
+                            if (!manga.mainCharacters.isNullOrBlank()) {
+                                Text(
+                                    text = "شخصیت‌های اصلی: ${manga.mainCharacters}",
+                                    color = Color.LightGray.copy(alpha = 0.8f),
+                                    fontSize = 10.sp,
+                                    lineHeight = 13.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -234,54 +252,6 @@ fun MangaDetailView(
                                 .clickable { isDescExpanded = !isDescExpanded }
                                 .padding(top = 8.dp)
                         )
-                    }
-                }
-            }
-
-            // CREW / STAFF OF PROJECT
-            item {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(bottom = 10.dp)
-                    ) {
-                        Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF03DAC6), modifier = Modifier.size(18.dp))
-                        Text("عوامل تخصصی ترجمه و طراحی مانگاتا", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        mockStaff.forEach { (job, name) ->
-                            Card(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .border(1.dp, Color.Gray.copy(alpha = 0.15f), RoundedCornerShape(8.dp)),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF141218))
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF2E2A3A)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(job.take(1), color = Color(0xFF03DAC6), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(job, color = Color.Gray, fontSize = 9.sp, textAlign = TextAlign.Center)
-                                    Text(name, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
-                                }
-                            }
-                        }
                     }
                 }
             }

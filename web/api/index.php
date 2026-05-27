@@ -48,6 +48,18 @@ $params = array_merge($_POST, $json_params, $_GET);
 // Router matching
 try {
     switch ($path) {
+        // ================= GLOBAL SETTINGS =================
+        case 'settings/get':
+            api_send_success([
+                'force_update_app_active' => get_mangata_setting('force_update_app_active', '0'),
+                'force_update_app_url' => get_mangata_setting('force_update_app_url', 'https://mr-v.ir/'),
+                'force_update_app_msg' => get_mangata_setting('force_update_app_msg', ''),
+                'force_update_web_active' => get_mangata_setting('force_update_web_active', '0'),
+                'force_update_web_version' => get_mangata_setting('force_update_web_version', '1'),
+                'force_update_web_msg' => get_mangata_setting('force_update_web_msg', '')
+            ]);
+            break;
+
         // ================= CLIENT AUTHENTICATION =================
         case 'auth/login':
             $username = trim($params['username'] ?? '');
@@ -152,7 +164,37 @@ try {
 
         // ================= MANHWAS =================
         case 'manhwa/list':
-            $stmt = $pdo->query("SELECT * FROM mangata_mangas ORDER BY id DESC");
+            $search = trim($params['search'] ?? '');
+            $genre = trim($params['genre'] ?? '');
+            $year = trim($params['year'] ?? '');
+            $character = trim($params['character'] ?? '');
+
+            $query = "SELECT * FROM mangata_mangas WHERE 1=1";
+            $sql_params = [];
+
+            if (!empty($search)) {
+                $query .= " AND (title LIKE ? OR author LIKE ? OR description LIKE ?)";
+                $sql_params[] = "%$search%";
+                $sql_params[] = "%$search%";
+                $sql_params[] = "%$search%";
+            }
+            if (!empty($genre)) {
+                $query .= " AND genres LIKE ?";
+                $sql_params[] = "%$genre%";
+            }
+            if (!empty($year)) {
+                $query .= " AND release_year = ?";
+                $sql_params[] = $year;
+            }
+            if (!empty($character)) {
+                $query .= " AND main_characters LIKE ?";
+                $sql_params[] = "%$character%";
+            }
+
+            $query .= " ORDER BY id DESC";
+            $stmt = $pdo->prepare($query);
+            $stmt->execute($sql_params);
+
             $mangas = [];
             while ($row = $stmt->fetch()) {
                 $mangas[] = [
@@ -160,6 +202,10 @@ try {
                     'title' => $row['title'],
                     'description' => $row['description'],
                     'cover_image' => $row['cover_image'] ? $row['cover_image'] : null,
+                    'genres' => $row['genres'] ?? '',
+                    'release_year' => $row['release_year'] ?? '',
+                    'main_characters' => $row['main_characters'] ?? '',
+                    'author' => $row['author'] ?? '',
                     'created_at' => $row['created_at']
                 ];
             }
@@ -170,13 +216,17 @@ try {
             $title = trim($params['title'] ?? '');
             $desc = trim($params['description'] ?? '');
             $cover = trim($params['cover_image'] ?? '');
+            $genres = trim($params['genres'] ?? '');
+            $release_year = trim($params['release_year'] ?? '');
+            $main_characters = trim($params['main_characters'] ?? '');
+            $author = trim($params['author'] ?? '');
 
             if (empty($title)) {
                 api_send_error('عنوان مانهوا الزامی است.');
             }
 
-            $stmt = $pdo->prepare("INSERT INTO mangata_mangas (title, description, cover_image) VALUES (?, ?, ?)");
-            $stmt->execute([$title, $desc, $cover]);
+            $stmt = $pdo->prepare("INSERT INTO mangata_mangas (title, description, cover_image, genres, release_year, main_characters, author) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$title, $desc, $cover, $genres, $release_year, $main_characters, $author]);
             $manga_id = $pdo->lastInsertId();
 
             api_send_success([
@@ -283,17 +333,15 @@ try {
                 $files = @scandir($extract_dir) ?: [];
                 $img_extensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
                 
+                // Sort files naturally first to guarantee 1.png, 2.png, 10.png order
+                usort($files, 'strnatcasecmp');
+                
                 foreach ($files as $file) {
                     if (in_array($file, ['.', '..'])) continue;
                     $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
                     if (in_array($ext, $img_extensions)) {
                         $extracted_images[] = $base_url . 'uploads/extracts/' . $manga_id . '/' . $chapter_num . '/' . $file;
                     }
-                }
-
-                if (!empty($extracted_images)) {
-                    natcasesort($extracted_images);
-                    $extracted_images = array_values($extracted_images);
                 }
             } else {
                 api_send_error('فایل زیپ نامعتبر است یا استخراج آن شکست خورد.');
@@ -476,6 +524,22 @@ try {
                 'assignment_id' => (string)$assignment_id,
                 'message' => 'عضو تیم با موفقیت به کار انتخابی متصل شد.'
             ]);
+            break;
+
+        case 'staff/list-by-manga':
+            $manga_id = isset($params['manga_id']) ? (int)$params['manga_id'] : 0;
+            if ($manga_id <= 0) {
+                api_send_error('شناسه مانهوا نامعتبر است.');
+            }
+            $stmt = $pdo->prepare("
+                SELECT s.role, u.username, u.email 
+                FROM mangata_staff s 
+                JOIN mangata_users u ON s.user_id = u.id 
+                WHERE s.manga_id = ?
+            ");
+            $stmt->execute([$manga_id]);
+            $staff = $stmt->fetchAll() ?: [];
+            api_send_success($staff);
             break;
 
         // ================= ADVANCED ADMIN TOOLS =================

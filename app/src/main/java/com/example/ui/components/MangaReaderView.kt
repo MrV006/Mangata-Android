@@ -47,7 +47,19 @@ fun MangaReaderView(
     // Parse the image urls list from gson string
     val imagesList: List<String> = try {
         if (!chapter.imagesJson.isNullOrEmpty()) {
-            Gson().fromJson(chapter.imagesJson, Array<String>::class.java).toList()
+            val parsed = Gson().fromJson(chapter.imagesJson, Array<String>::class.java).toList()
+            // Natural numeric sort on file names (e.g. extracts 1, 2, 10 out of .../1.png, .../2.png)
+            parsed.sortedWith { u1, u2 ->
+                val f1 = u1.substringAfterLast("/").substringBeforeLast(".")
+                val f2 = u2.substringAfterLast("/").substringBeforeLast(".")
+                val n1 = f1.filter { it.isDigit() }.toIntOrNull()
+                val n2 = f2.filter { it.isDigit() }.toIntOrNull()
+                if (n1 != null && n2 != null) {
+                    n1.compareTo(n2)
+                } else {
+                    f1.compareTo(f2, ignoreCase = true)
+                }
+            }
         } else {
             emptyList()
         }

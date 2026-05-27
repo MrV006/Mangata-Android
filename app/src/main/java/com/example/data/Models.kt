@@ -37,7 +37,11 @@ data class MangaItem(
     @SerializedName("title") val title: String,
     @SerializedName("description") val description: String,
     @SerializedName("cover_image") val coverImage: String?,
-    @SerializedName("created_at") val createdAt: String
+    @SerializedName("created_at") val createdAt: String,
+    @SerializedName("genres") val genres: String? = null,
+    @SerializedName("release_year") val releaseYear: String? = null,
+    @SerializedName("main_characters") val mainCharacters: String? = null,
+    @SerializedName("author") val author: String? = null
 )
 
 data class ChapterItem(
@@ -80,4 +84,13 @@ data class StaffAssignmentRequest(
 data class SessionValidResponse(
     @SerializedName("valid") val valid: Boolean,
     @SerializedName("role") val role: String
+)
+
+data class AppSettingsResponse(
+    @SerializedName("force_update_app_active") val forceUpdateAppActive: String,
+    @SerializedName("force_update_app_url") val forceUpdateAppUrl: String,
+    @SerializedName("force_update_app_msg") val forceUpdateAppMsg: String,
+    @SerializedName("force_update_web_active") val forceUpdateWebActive: String,
+    @SerializedName("force_update_web_version") val forceUpdateWebVersion: String,
+    @SerializedName("force_update_web_msg") val forceUpdateWebMsg: String
 )

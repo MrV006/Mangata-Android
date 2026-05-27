@@ -6,6 +6,11 @@
 
 require_once __DIR__ . '/config.php';
 
+if (!is_logged_in()) {
+    header("Location: index.php");
+    exit;
+}
+
 $manga_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($manga_id <= 0) {
@@ -36,15 +41,7 @@ $stmt_staff = $pdo->prepare("
 ");
 $stmt_staff->execute([$manga_id]);
 $allocated_staff = $stmt_staff->fetchAll();
-
-// Standalone fallback staff if none assigned to prevent empty layouts
-if (empty($allocated_staff)) {
-    $allocated_staff = [
-        ['username' => 'smaali (امیررضا)', 'role' => 'Translator - مترجم خلاق'],
-        ['username' => 'AliAK_ED (علی‌اکبر)', 'role' => 'Editor & TS - طراح بورد'],
-        ['username' => 'Zmohammadpoor97', 'role' => 'Cleaner - کلینر تخصصی']
-    ];
-}
+$allocated_staff = $allocated_staff ?: [];
 ?>
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -219,13 +216,27 @@ if (empty($allocated_staff)) {
         <img class="details-cover" src="<?php echo htmlspecialchars($manga['cover_image'] ?: "https://placehold.co/300x450/121214/ffffff?text=No+Cover"); ?>" alt="<?php echo htmlspecialchars($manga['title']); ?>">
         
         <div class="details-meta">
-            <div class="badge-row">
-                <span class="badge-meta accent">مانهوا کره‌ای</span>
-                <span class="badge-meta cyan">در حال پخش و ترجمه</span>
-                <span class="badge-meta orange">⭐ امتیاز کاربری: 9.9 / 10</span>
-            </div>
             <h1 style="color:#fff; margin:0 0 10px 0; font-size:32px; font-weight:900; text-shadow: 0 4px 15px rgba(0,0,0,0.6);"><?php echo htmlspecialchars($manga['title']); ?></h1>
-            <p style="color:#aaa; font-size:14px; margin:0;">تاریخ انتشار در پلتفرم مانگاتا: <?php echo date('Y-m-d', strtotime($manga['created_at'])); ?></p>
+            <p style="color:#aaa; font-size:14px; margin:0 0 15px 0;">تاریخ انتشار در پلتفرم مانگاتا: <?php echo date('Y-m-d', strtotime($manga['created_at'])); ?></p>
+            
+            <div class="badge-row">
+                <?php if (!empty($manga['author'])): ?>
+                    <span class="badge-meta accent">✍️ نویسنده: <?php echo htmlspecialchars($manga['author']); ?></span>
+                <?php endif; ?>
+                <?php if (!empty($manga['release_year'])): ?>
+                    <span class="badge-meta cyan">📅 سال انتشار: <?php echo htmlspecialchars($manga['release_year']); ?></span>
+                <?php endif; ?>
+                <?php if (!empty($manga['genres'])): ?>
+                    <?php 
+                    $genres_array = explode(',', $manga['genres']);
+                    foreach ($genres_array as $g): $g = trim($g); if (!empty($g)): ?>
+                        <span class="badge-meta orange">🏷️ ژانر: <?php echo htmlspecialchars($g); ?></span>
+                    <?php endif; endforeach; ?>
+                <?php endif; ?>
+            </div>
+            <?php if (!empty($manga['main_characters'])): ?>
+                <p style="color:#03dac6; font-size:13px; margin:12px 0 0 0; font-weight:bold; text-shadow:0 2px 4px rgba(0,0,0,0.6);">🌟 شخصیت‌های اصلی: <span style="color:#e0e0e0; font-weight:normal;"><?php echo htmlspecialchars($manga['main_characters']); ?></span></p>
+            <?php endif; ?>
         </div>
     </div>
 </div>
@@ -243,6 +254,7 @@ if (empty($allocated_staff)) {
     </div>
 
     <!-- Translation staff active -->
+    <?php if (!empty($allocated_staff)): ?>
     <div class="section-box">
         <h3 style="color:#03dac6; margin-top:0; font-size:18px; font-weight:bold; display:flex; align-items:center; gap:8px;">
             <span>👥</span> عوامل فنی و ترجمه تخصصی مانگاتا
@@ -263,6 +275,7 @@ if (empty($allocated_staff)) {
             <?php endforeach; ?>
         </div>
     </div>
+    <?php endif; ?>
 
     <!-- Chapters list table -->
     <div class="section-box">
