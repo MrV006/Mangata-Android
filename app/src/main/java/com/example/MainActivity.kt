@@ -192,6 +192,7 @@ class MainActivity : ComponentActivity() {
                                         userRole = user.role,
                                         username = user.username,
                                         mangas = mangas,
+                                        chaptersMap = chapters,
                                         isLoading = isLoading,
                                         onNavigateToRecruitment = { currentScreen = "recruitment" },
                                         onNavigateToStaff = { currentScreen = "staff" },
@@ -199,6 +200,10 @@ class MainActivity : ComponentActivity() {
                                         onSelectManga = { manga ->
                                             selectedMangaForDetails = manga
                                             viewModel.fetchChapters(manga.id)
+                                        },
+                                        onQuickReadChapter = { manga, chapter ->
+                                            selectedMangaForReader = manga
+                                            selectedChapterForReader = chapter
                                         },
                                         onLogout = { viewModel.logout() },
                                         onTriggerCacheClear = { viewModel.clearAppCache() },
@@ -573,11 +578,13 @@ fun HomeScreenContent(
     userRole: String,
     username: String,
     mangas: List<MangaItem>,
+    chaptersMap: Map<Int, List<ChapterItem>>,
     isLoading: Boolean,
     onNavigateToRecruitment: () -> Unit,
     onNavigateToStaff: () -> Unit,
     onNavigateToAdmin: () -> Unit,
     onSelectManga: (MangaItem) -> Unit,
+    onQuickReadChapter: (MangaItem, ChapterItem) -> Unit,
     onLogout: () -> Unit,
     onTriggerCacheClear: () -> Unit,
     onSearch: (String?, String?, String?, String?) -> Unit
@@ -596,7 +603,8 @@ fun HomeScreenContent(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF141218))
+                    .background(Color(0xFF0C0A0F))
+                    .border(BorderStroke(1.dp, Color(0xFFBB86FC).copy(alpha = 0.15f)))
                     .padding(horizontal = 16.dp, vertical = 14.dp)
             ) {
                 Row(
@@ -605,21 +613,38 @@ fun HomeScreenContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "MANGATA | مانگاتا 🎨",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 18.sp,
+                                color = Color(0xFFBB86FC)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(30.dp))
+                                    .background(Color(0xFF03DAC6).copy(alpha = 0.15f))
+                                    .border(1.dp, Color(0xFF03DAC6).copy(alpha = 0.3f), RoundedCornerShape(30.dp))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text("Premium 👑", color = Color(0xFF03DAC6), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "مانگاهلوگ مانگاتا",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "حساب کاربر: $username (${translateRole(userRole)})",
-                            style = MaterialTheme.typography.labelMedium,
+                            text = "کاربر فعال مانهواخوان: $username (${translateRole(userRole)})",
+                            style = MaterialTheme.typography.labelSmall,
                             color = Color.Gray
                         )
                     }
 
-                    IconButton(onClick = onLogout) {
-                        Icon(imageVector = Icons.Default.ExitToApp, contentDescription = "Logout", tint = Color.Red)
+                    IconButton(
+                        onClick = onLogout,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(30.dp))
+                            .background(Color.Red.copy(alpha = 0.1f))
+                    ) {
+                        Icon(imageVector = Icons.Default.ExitToApp, contentDescription = "Logout", tint = Color.Red, modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -634,47 +659,85 @@ fun HomeScreenContent(
         ) {
             // Quick navigations based on Roles
             item {
-                Row(
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF14101A)),
+                    border = BorderStroke(1.dp, Color(0xFFFF7597).copy(alpha = 0.2f))
                 ) {
-                    // Try recruitment button (open to everyone)
-                    Button(
-                        onClick = onNavigateToRecruitment,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF7597).copy(alpha = 0.2f))
-                    ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = "Job", tint = Color(0xFFFF7597), modifier = Modifier.size(16.dp))
-                            Text("آزمون استخدام", color = Color.White, fontSize = 11.sp)
-                        }
-                    }
-
-                    // ZIP upload button (for crew & admin)
-                    val isCrewOrAdmin = userRole == "administrator" || userRole == "contributor" || userRole == "author" || userRole == "editor"
-                    if (isCrewOrAdmin) {
-                        Button(
-                            onClick = onNavigateToStaff,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.Send, contentDescription = "ZIP", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                                Text("آپلود ZIP چپتر", color = Color.White, fontSize = 11.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(imageVector = Icons.Default.Star, contentDescription = "Cmd", tint = Color(0xFFFF7597), modifier = Modifier.size(16.dp))
+                                Text(
+                                    text = "🎮 مرکز تسک‌ها و مأموریت‌های مانگاتا",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFFFF7597)
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(30.dp))
+                                    .background(Color(0xFFFF7597).copy(alpha = 0.12f))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text("پورتال هماهنگ ⚡", color = Color(0xFFFF7597), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                             }
                         }
-                    }
-
-                    // Super Admin Control Panel
-                    if (userRole == "administrator") {
-                        Button(
-                            onClick = onNavigateToAdmin,
-                            modifier = Modifier.weight(1.2f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB71C1C))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.Settings, contentDescription = "Admin", tint = Color.White, modifier = Modifier.size(16.dp))
-                                Text("پنل ادمین کل", color = Color.White, fontSize = 11.sp)
+                            // Try recruitment button (open to everyone)
+                            Button(
+                                onClick = onNavigateToRecruitment,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF7597).copy(alpha = 0.15f)),
+                                border = BorderStroke(1.dp, Color(0xFFFF7597).copy(alpha = 0.4f))
+                            ) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(imageVector = Icons.Default.Add, contentDescription = "Job", tint = Color(0xFFFF7597), modifier = Modifier.size(14.dp))
+                                    Text("آزمون استخدام 📝", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            // ZIP upload button (for crew & admin)
+                            val isCrewOrAdmin = userRole == "administrator" || userRole == "contributor" || userRole == "author" || userRole == "editor"
+                            if (isCrewOrAdmin) {
+                                Button(
+                                    onClick = onNavigateToStaff,
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF03DAC6).copy(alpha = 0.15f)),
+                                    border = BorderStroke(1.dp, Color(0xFF03DAC6).copy(alpha = 0.4f))
+                                ) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(imageVector = Icons.Default.Send, contentDescription = "ZIP", tint = Color(0xFF03DAC6), modifier = Modifier.size(14.dp))
+                                        Text("آپلود ZIP چپتر 📤", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            // Super Admin Control Panel
+                            if (userRole == "administrator") {
+                                Button(
+                                    onClick = onNavigateToAdmin,
+                                    modifier = Modifier.weight(1.1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB71C1C).copy(alpha = 0.8f))
+                                ) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(imageVector = Icons.Default.Settings, contentDescription = "Admin", tint = Color.White, modifier = Modifier.size(14.dp))
+                                        Text("مدیریت کل ⚙️", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             }
                         }
                     }
@@ -942,6 +1005,152 @@ fun HomeScreenContent(
                 }
             }
 
+            // 🏆 PRE-LOAD FEATURED WEEKLY SLIDE (Connected to live database)
+            val featuredManga = mangas.firstOrNull()
+            if (featuredManga != null) {
+                item {
+                    Text(
+                        text = "🔥 مانهوای برگزیده هفته (پورتال مانگاتا)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF03DAC6),
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .clickable { onSelectManga(featuredManga) },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B24)),
+                        border = BorderStroke(1.2.dp, Brush.horizontalGradient(listOf(Color(0xFF03DAC6), Color(0xFFBB86FC))))
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            val coverUrl = featuredManga.coverImage
+                            if (!coverUrl.isNullOrEmpty()) {
+                                AsyncImage(
+                                    model = coverUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop,
+                                    alpha = 0.35f
+                                )
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                Color.Black.copy(alpha = 0.85f)
+                                            )
+                                        )
+                                    )
+                            )
+                            
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                if (!coverUrl.isNullOrEmpty()) {
+                                    AsyncImage(
+                                        model = coverUrl,
+                                        contentDescription = featuredManga.title,
+                                        modifier = Modifier
+                                            .width(70.dp)
+                                            .height(100.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(30.dp))
+                                            .background(Color(0xFF03DAC6))
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("🏆 رتبه اول کاربری", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    
+                                    Text(
+                                        text = featuredManga.title,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 18.sp,
+                                        color = Color.White
+                                    )
+                                    
+                                    Text(
+                                        text = featuredManga.description,
+                                        fontSize = 11.sp,
+                                        color = Color.LightGray,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        lineHeight = 16.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 🏷️ LIVE CHIPS CATEGORY ROW
+            item {
+                Text(
+                    text = "🏷️ دسته‌بندی مانهواها براساس بیشترین لایک",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.LightGray
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                androidx.compose.foundation.lazy.LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val quickGenres = listOf("همه", "اکشن", "کمدی", "درام", "فانتزی", "ماجراجویی", "عاشقانه")
+                    items(quickGenres) { gen ->
+                        val isSelected = (gen == "همه" && selectedGenre.isEmpty()) || (gen == selectedGenre)
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(30.dp))
+                                .background(if (isSelected) Color(0xFFBB86FC) else Color(0xFF1E1B24))
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) Color(0xFFBB86FC) else Color.White.copy(alpha = 0.1f),
+                                    shape = RoundedCornerShape(30.dp)
+                                )
+                                .clickable {
+                                    selectedGenre = if (gen == "همه") "" else gen
+                                    onSearch(
+                                        searchText.takeIf { it.isNotEmpty() },
+                                        selectedGenre.takeIf { it.isNotEmpty() },
+                                        selectedYear.takeIf { it.isNotEmpty() },
+                                        selectedCharacter.takeIf { it.isNotEmpty() }
+                                    )
+                                }
+                                .padding(horizontal = 14.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = gen,
+                                color = if (isSelected) Color.Black else Color.LightGray,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
             item {
                 Text(
                     text = "لیست آثار مانهوا هوشمند",
@@ -967,7 +1176,9 @@ fun HomeScreenContent(
                 items(mangas) { manga ->
                     MangaItemCard(
                         manga = manga,
-                        onClick = { onSelectManga(manga) }
+                        chapters = chaptersMap[manga.id] ?: emptyList(),
+                        onClick = { onSelectManga(manga) },
+                        onQuickReadChapter = { ch -> onQuickReadChapter(manga, ch) }
                     )
                 }
             }
@@ -978,85 +1189,171 @@ fun HomeScreenContent(
 @Composable
 fun MangaItemCard(
     manga: MangaItem,
-    onClick: () -> Unit
+    chapters: List<ChapterItem>,
+    onClick: () -> Unit,
+    onQuickReadChapter: (ChapterItem) -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF16141F)),
-        shape = RoundedCornerShape(12.dp)
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF14121A)),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, Color(0xFFBB86FC).copy(alpha = 0.15f))
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Cover
-            val coverUrl = manga.coverImage
-            if (!coverUrl.isNullOrEmpty()) {
-                AsyncImage(
-                    model = coverUrl,
-                    contentDescription = manga.title,
-                    modifier = Modifier
-                        .size(width = 85.dp, height = 120.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(1.dp, Color(0xFFFF7597).copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.Top
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Cover Image with rating badge
+                val coverUrl = manga.coverImage
+                Box(
+                    modifier = Modifier
+                        .size(width = 90.dp, height = 130.dp)
+                        .clip(RoundedCornerShape(12.dp))
                 ) {
-                    Text(
-                        text = manga.title, 
-                        fontWeight = FontWeight.ExtraBold, 
-                        style = MaterialTheme.typography.titleMedium, 
-                        color = Color.White
-                    )
+                    if (!coverUrl.isNullOrEmpty()) {
+                        AsyncImage(
+                            model = coverUrl,
+                            contentDescription = manga.title,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF231F2E)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No Cover", color = Color.Gray, fontSize = 10.sp)
+                        }
+                    }
                     
+                    // Rating tag floating overlay
                     Box(
                         modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(4.dp)
                             .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFFFF7597).copy(alpha = 0.2f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .background(Color.Black.copy(alpha = 0.75f))
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
                     ) {
-                        Text("مشاهده جزئیات", color = Color(0xFFFF7597), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        Text("⭐ ۹.۸", color = Color(0xFFFFD700), fontSize = 8.sp, fontWeight = FontWeight.Black)
                     }
                 }
 
-                Text(
-                    text = manga.description, 
-                    style = MaterialTheme.typography.bodySmall, 
-                    color = Color.LightGray, 
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 18.sp
-                )
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // Title + metadata column
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(30.dp))
-                            .background(Color(0xFF231F2E))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("مجموعه مانگاتا", color = Color(0xFF03DAC6), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = manga.title, 
+                            fontWeight = FontWeight.ExtraBold, 
+                            style = MaterialTheme.typography.titleMedium, 
+                            color = Color.White
+                        )
+                        
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFFFF7597).copy(alpha = 0.15f))
+                                .border(BorderStroke(1.dp, Color(0xFFFF7597).copy(alpha = 0.3f)), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                        ) {
+                            Text("رایگان 🔓", color = Color(0xFFFF7597), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
-                    Text(text = "آخرین انتشار: " + manga.createdAt.take(10), color = Color.Gray, fontSize = 9.sp)
+
+                    Text(
+                        text = manga.description, 
+                        style = MaterialTheme.typography.bodySmall, 
+                        color = Color.LightGray, 
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 16.sp
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val genresList = manga.genres?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+                        genresList.take(2).forEach { g ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(30.dp))
+                                    .background(Color(0xFFBB86FC).copy(alpha = 0.15f))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(text = g, color = Color(0xFFBB86FC), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Text(text = "برند: مانگاتا", color = Color.Gray, fontSize = 9.sp)
+                    }
+                }
+            }
+
+            // Quick chapters reading section! (If there are any chapters loaded)
+            if (chapters.isNotEmpty()) {
+                Divider(color = Color.White.copy(alpha = 0.08f), thickness = 0.8.dp)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "🚀 خوانش سریع چپترهای اخیر پلتفرم:",
+                        color = Color(0xFF03DAC6),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        chapters.sortedByDescending { it.chapterNumber }.take(2).forEach { ch ->
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { onQuickReadChapter(ch) },
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B24)),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(0.8.dp, Color(0xFF03DAC6).copy(alpha = 0.3f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "چپتر " + if (ch.chapterNumber % 1.0 == 0.0) ch.chapterNumber.toInt() else ch.chapterNumber,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 11.sp,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "ریدر 👁️",
+                                        color = Color(0xFF03DAC6),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

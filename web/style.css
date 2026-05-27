@@ -225,3 +225,126 @@ table tr:hover {
 .font-bold {
     font-weight: bold;
 }
+
+/* Responsive Layout Optimization for All Devices (Mobile/Thumb up to Cinema Screens) */
+
+/* General Container Scaling */
+.container {
+    width: 100%;
+    max-width: 1600px; /* Cinema scale ready */
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+/* Perfect Flex Panels Wrap */
+.panel-flex {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    width: 100%;
+}
+.panel-flex > .card {
+    flex: 1 1 420px;
+    box-sizing: border-box;
+    min-width: 0; /* Prevents overflow in flexbox */
+}
+
+/* Ultra responsive grid columns */
+.manhwa-grid {
+    display: grid;
+    /* Adapts columns perfectly up to massive screens */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+    margin: 30px auto;
+}
+
+/* Ensure table container has overflow scroll */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 20px;
+    border-radius: 12px;
+}
+
+/* Massive Cinema Screen Optimizations (>= 1900px wide) */
+@media (min-width: 1900px) {
+    .container {
+        max-width: 1800px;
+    }
+    .manhwa-grid {
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 32px;
+    }
+    body {
+        font-size: 16px;
+    }
+}
+
+/* Medium Tablets & Desktop Scaling Adjustments */
+@media (max-width: 1024px) {
+    .container {
+        padding: 20px 15px;
+    }
+    .manhwa-grid {
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 20px;
+    }
+}
+
+/* Extreme Small/Mobile/Thumb Screen Optimizations */
+@media (max-width: 480px) {
+    body {
+        font-size: 13px;
+    }
+    .container {
+        padding: 10px 8px;
+    }
+    header {
+        padding: 12px 10px;
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+    }
+    header h1 a {
+        font-size: 20px;
+    }
+    header nav {
+        justify-content: center;
+        gap: 10px;
+        width: 100%;
+    }
+    header nav a {
+        font-size: 11px;
+    }
+    .manhwa-grid {
+        grid-template-columns: 1fr; /* Single column layout for tiny thumb screens */
+        gap: 16px;
+    }
+    .card {
+        padding: 16px;
+        border-radius: 8px;
+    }
+    .card-manga img {
+        height: 220px !important; /* Elegant vertical scale on small screen */
+    }
+    .btn {
+        width: 100%; /* Force buttons full-width for easy fingers selection on mobile */
+        box-sizing: border-box;
+        padding: 10px 16px;
+    }
+    /* Simple form inputs full stretch formatting */
+    form div {
+        display: block !important;
+        width: 100% !important;
+    }
+    input, select, textarea {
+        font-size: 12px;
+        padding: 10px;
+    }
+    /* Quick responsive tweaks for profile panel tables */
+    table th, table td {
+        padding: 8px 6px;
+        font-size: 11px;
+    }
+}

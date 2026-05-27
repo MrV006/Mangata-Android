@@ -187,7 +187,12 @@ class MangaViewModel(application: Application) : AndroidViewModel(application) {
             val result = repository.getManhwas(search, genre, year, character)
             _isLoading.value = false
             if (result.isSuccess) {
-                _mangas.value = result.getOrNull() ?: emptyList()
+                val list = result.getOrNull() ?: emptyList()
+                _mangas.value = list
+                // Real-time background chapter fetching for elite quick home readings!
+                list.forEach { manga ->
+                    fetchChapters(manga.id)
+                }
             } else {
                 _errorMessage.value = result.exceptionOrNull()?.message
             }

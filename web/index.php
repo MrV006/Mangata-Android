@@ -695,6 +695,27 @@ function executeForcedWebCacheRefresh() {
             </div>
         </form>
     </div>
+
+    <!-- Beautiful Horizontal Scrollable Genre Navigation Row (Synced visually with Jetpack Compose app chips) -->
+    <div style="margin: 25px 0 15px 0;">
+        <h3 style="color:#03dac6; font-size:14px; margin-bottom:12px; font-weight:bold; display:flex; align-items:center; gap:8px;">🏷️ دسته‌بندی مانهواها براساس بیشترین لایک:</h3>
+        <div style="display:flex; gap:10px; overflow-x:auto; padding-bottom:8px; -webkit-overflow-scrolling:touch; scrollbar-width: none; -ms-overflow-style: none;">
+            <?php
+            $quick_genres = ["همه" => "", "اکشن" => "اکشن", "کمدی" => "کمدی", "درام" => "درام", "فانتزی" => "فانتزی", "ماجراجویی" => "ماجراجویی", "عاشقانه" => "عاشقانه"];
+            foreach ($quick_genres as $label => $val):
+                $active = ($val === $genre);
+                $link = "?genre=" . urlencode($val);
+                if (empty($val)) $link = ".";
+                $bg = $active ? "#bb86fc" : "rgba(30, 27, 36, 0.65)";
+                $color = $active ? "#000" : "#ccc";
+                $border = $active ? "1px solid #bb86fc" : "1px solid rgba(255,255,255,0.08)";
+            ?>
+                <a href="<?php echo $link; ?>" style="background:<?php echo $bg; ?>; color:<?php echo $color; ?>; border:<?php echo $border; ?>; padding:8px 16px; border-radius:50px; font-size:12px; font-weight:bold; text-decoration:none; white-space:nowrap; transition:all 0.2s;">
+                    <?php echo $label; ?>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
     
     <div class="manhwa-grid">
         <?php if (!empty($mangas)): ?>
