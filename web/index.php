@@ -90,6 +90,37 @@ if (isset($_POST['update_own_profile']) && is_logged_in()) {
     }
 }
 
+// Handle Wallet Recharge from Profile Dashboard
+if (isset($_POST['quick_charge_web']) && is_logged_in()) {
+    $amount = (int)($_POST['charge_amount'] ?? 15000);
+    $stmt_up = $pdo->prepare("UPDATE mangata_users SET wallet_balance = wallet_balance + ? WHERE id = ?");
+    $stmt_up->execute([$amount, $_SESSION['user_id']]);
+    $self_update_msg = '<div class="success-message font-bold">🪙 شارژ موفقیت‌آمیز! کیف پول شما با موفقیت ' . number_format($amount) . ' تومان شارژ شد.</div>';
+}
+
+// Handle Profile Bookmark Cycle Status
+if (isset($_POST['cycle_status_web']) && is_logged_in()) {
+    $m_id = (int)$_POST['cycle_manga_id'];
+    $current_status = $_POST['current_status'];
+    $next_status = 'Reading';
+    if ($current_status === 'Reading') {
+        $next_status = 'Completed';
+    } else if ($current_status === 'Completed') {
+        $next_status = 'Favorite';
+    }
+    $stmt_up = $pdo->prepare("UPDATE mangata_bookmarks SET status = ? WHERE user_id = ? AND manga_id = ?");
+    $stmt_up->execute([$next_status, $_SESSION['user_id'], $m_id]);
+    $self_update_msg = '<div class="success-message">وضعیت مانهوای نشانک‌گذاری شده با موفقیت به «' . htmlspecialchars($next_status) . '» تغییر یافت.</div>';
+}
+
+// Handle Profile Bookmark Deletion
+if (isset($_POST['remove_bookmark_web']) && is_logged_in()) {
+    $m_id = (int)$_POST['remove_manga_id'];
+    $stmt_del = $pdo->prepare("DELETE FROM mangata_bookmarks WHERE user_id = ? AND manga_id = ?");
+    $stmt_del->execute([$_SESSION['user_id'], $m_id]);
+    $self_update_msg = '<div class="success-message" style="background:#b71c1c;">مانهوا با موفقیت از بین لیست نشانک‌های شما حذف گردید.</div>';
+}
+
 // Handle recruitment exam upload form submit in pure PHP
 $upload_msg = '';
 if (isset($_POST['submit_exam'])) {
@@ -551,43 +582,76 @@ function executeForcedWebCacheRefresh() {
                 <?php echo $self_update_msg; ?>
 
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:25px; margin-top:15px;">
-                    <!-- User details list -->
-                    <div style="background:#111; padding:20px; border-radius:8px; border:1px solid #222;">
-                        <h3 style="color:#03dac6; margin-top:0; font-size:16px; border-bottom:1px solid #222; padding-bottom:8px;">اطلاعات کاربری</h3>
-                        <p style="color:#ccc; font-size:14px; margin:12px 0;"><strong>نام کاربری:</strong> <code style="color:#ff7597; font-size:15px;"><?php echo htmlspecialchars($_SESSION['username']); ?></code></p>
-                        <p style="color:#ccc; font-size:14px; margin:12px 0;"><strong>نقش دسترسی پلتفرم:</strong> <span class="badge" style="background:#bb86fc; color:#000; font-size:12px; font-weight:bold; padding:4px 8px;"><?php echo htmlspecialchars($_SESSION['user_role']); ?></span></p>
+                    <!-- User Details + Avatar Card -->
+                    <div style="background:#111; padding:20px; border-radius:8px; border:1px solid #222; text-align: center;">
+                        <div style="position:relative; margin: 15px auto; width: fit-content;">
+                            <img src="https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150&auto=format&fit=crop" style="width: 90px; height: 90px; border-radius: 50%; border: 3px solid #bb86fc; box-shadow: 0 0 15px rgba(187,134,252,0.4);" />
+                            <div style="background:#ff7597; color:white; font-size:10px; width:fit-content; margin:-12px auto 0 auto; padding:2px 10px; border-radius:20px; font-weight:bold; border: 1.5px solid #111;">PRO USER</div>
+                        </div>
+                        <h3 style="color:#03dac6; margin: 10px 0 5px 0; font-size:18px; font-weight:bold;"><?php echo htmlspecialchars($_SESSION['username']); ?></h3>
+                        <p style="color:#888; font-size:12px; margin:0 0 15px 0;">شناسه عددی کاربر: #<?php echo (int)$_SESSION['user_id']; ?></p>
                         
                         <?php
-                        // Fetch fresh email and exam status from DB
-                        $stmt_profile = $pdo->prepare("SELECT email FROM mangata_users WHERE id = ?");
+                        // Fetch fresh email, wallet_balance and exam status from DB
+                        $stmt_profile = $pdo->prepare("SELECT email, wallet_balance FROM mangata_users WHERE id = ?");
                         $stmt_profile->execute([$_SESSION['user_id']]);
-                        $self_email = $stmt_profile->fetchColumn();
+                        $profile_fresh = $stmt_profile->fetch();
+                        $self_email = $profile_fresh ? $profile_fresh['email'] : '';
+                        $self_balance = $profile_fresh ? (int)$profile_fresh['wallet_balance'] : 2800;
 
                         $stmt_exam_status = $pdo->prepare("SELECT status, score FROM mangata_exams WHERE user_id = ? ORDER BY id DESC LIMIT 1");
                         $stmt_exam_status->execute([$_SESSION['user_id']]);
                         $exam_info = $stmt_exam_status->fetch();
                         ?>
 
-                        <p style="color:#ccc; font-size:14px; margin:12px 0;"><strong>آدرس ایمیل:</strong> <?php echo htmlspecialchars($self_email); ?></p>
-                        
-                        <div style="margin-top:20px; background:#1c1724; padding:12px; border-radius:6px; border:1px solid rgba(187,134,252,0.15);">
-                            <h4 style="color:#ff7597; margin:0 0 8px 0; font-size:13px; font-weight:bold;">وضعیت استخدام و آزمون شما:</h4>
+                        <div style="text-align: right; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04); font-size: 13px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
+                            <div style="display:flex; justify-content:space-between;"><span style="color:#888;">آدرس ایمیل:</span><span style="color:#fff; font-weight:bold;"><?php echo htmlspecialchars($self_email); ?></span></div>
+                            <div style="display:flex; justify-content:space-between;"><span style="color:#888;">نقش سیستم:</span><span class="badge" style="background:#bb86fc; color:#000; font-size:11px; padding:2px 6px;"><?php echo htmlspecialchars($_SESSION['user_role']); ?></span></div>
+                        </div>
+
+                        <div style="margin-top:10px; text-align: right; background:#1c1724; padding:12px; border-radius:6px; border:1px solid rgba(187,134,252,0.15);">
+                            <h4 style="color:#ff7597; margin:0 0 8px 0; font-size:13px; font-weight:bold;">وضعیت استخدام همکاران:</h4>
                             <?php if ($exam_info): ?>
                                 <span style="font-size:13px; font-weight:bold; color:#03dac6;">
                                     <?php echo htmlspecialchars($exam_info['status']); ?> 
-                                    <?php if ($exam_info['score'] !== null) { echo " (امتیاز ارزیابی: " . $exam_info['score'] . ")"; } ?>
+                                    <?php if ($exam_info['score'] !== null) { echo " (نمره آزمون: " . $exam_info['score'] . ")"; } ?>
                                 </span>
                             <?php else: ?>
                                 <span style="font-size:12px; color:#777;">شما تاکنون هیچ سند ارزیابی آپلود نکرده‌اید.</span>
                             <?php endif; ?>
                         </div>
 
-                        <!-- Special Administrative/Staff link -->
                         <?php if ($_SESSION['user_role'] === 'administrator' || strpos($_SESSION['user_role'], 'staff_') === 0): ?>
-                            <div style="margin-top:25px; text-align:center;">
-                                <a href="index.php#admin-desk" class="btn" style="background:#03dac6; color:#000; font-weight:bold; display:block; padding:10px; border-radius:8px; border:1px solid #03dac6; text-decoration:none;">ورود به پیشخوان پیشرفته مدیریت ⚡</a>
+                            <div style="margin-top:15px; text-align:center;">
+                                <a href="index.php#admin-desk" class="btn btn-sm" style="background:#03dac6; color:#000; font-weight:bold; display:block; padding:10px; border-radius:8px; text-decoration:none;">صفحه ادمین / وظایف همکاران ⚡</a>
                             </div>
                         <?php endif; ?>
+                    </div>
+
+                    <!-- Genuine Wallet System Card -->
+                    <div style="background:#111; padding:20px; border-radius:8px; border:1px solid #222;">
+                        <h3 style="color:#f59e0b; margin-top:0; font-size:16px; border-bottom:1px solid #222; padding-bottom:8px; font-weight:bold; display:flex; align-items:center; gap:6px;">🪙 موجودی و شارژ کیف پول</h3>
+                        
+                        <!-- Rich gradient card based on the premium application designs -->
+                        <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 20px; border-radius: 12px; margin: 15px 0; text-align: center; color: white; box-shadow: 0 4px 15px rgba(217,119,6,0.25);">
+                            <div style="font-size: 11px; margin-bottom: 6px; font-weight: bold; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.5px;">کیف پول دیجیتال مانگاتا</div>
+                            <div style="font-size: 30px; font-weight: 900; letter-spacing: 0.5px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <span style="font-family: inherit;"><?php echo number_format($self_balance); ?></span>
+                                <span style="font-size: 20px;">تومان</span>
+                            </div>
+                        </div>
+
+                        <p style="color:#888; font-size:11px; line-height:1.6; margin-bottom:15px;">با کیف پول شارژ شده می‌توانید از چپترهای ویژه، امکانات متمایز و کادوهای اهدایی داخل سایت و اپلیکیشن استفاده کنید.</p>
+                        
+                        <!-- Recharge form -->
+                        <form action="" method="POST" style="background: rgba(255, 255, 255, 0.03); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction:column; gap: 10px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:12px; font-weight:bold; color:#ccc;">مبلغ تراکنش شارژ:</span>
+                                <strong style="font-size:13px; color:#ffd54f;">۱۵,۰۰۰ تومان</strong>
+                            </div>
+                            <input type="hidden" name="charge_amount" value="15000">
+                            <button type="submit" name="quick_charge_web" class="btn" style="background:linear-gradient(135deg, #ea580c, #f59e0b); color:white; font-weight:bold; width:100%; font-size:12px; border-radius:6px; cursor:pointer;" class="btn-charge">💡 شارژ آنی محصول (۱۵,۰۰۰ تومان)</button>
+                        </form>
                     </div>
 
                     <!-- Change password form -->
@@ -604,6 +668,61 @@ function executeForcedWebCacheRefresh() {
                             </div>
                             <button type="submit" name="update_own_profile" class="btn" style="background:#bb86fc; color:#000; font-weight:bold; width:100%;">ثبت بروزرسانی حساب 💾</button>
                         </form>
+                    </div>
+
+                    <!-- Bookmarks Section (Full width of container) -->
+                    <div style="background:#111; padding:25px; border-radius:12px; border:1.5px solid rgba(124,77,255,0.25); grid-column: 1 / -1;">
+                        <h3 style="color:#bb86fc; margin-top:0; font-size:17px; border-bottom:1px solid #222; padding-bottom:10px; font-weight:bold; display:flex; align-items:center; gap:8px;">📌 نشانک‌ها و مانهواهای محبوب من (Synced Perfectly)</h3>
+                        <p style="color:#888; font-size:12px; margin-bottom:20px;">آثار نشانک‌گذاری شده شما همزمان در اپلیکیشن اندروید و وب‌سایت سینک هستند. می‌توانید وضعیت‌های هر کدام را به دلخواه مدیریت کنید.</p>
+                        
+                        <?php
+                        $stmt_b = $pdo->prepare("
+                            SELECT b.status, m.id as manga_id, m.title, m.cover_image, m.description
+                            FROM mangata_bookmarks b 
+                            JOIN mangata_mangas m ON b.manga_id = m.id 
+                            WHERE b.user_id = ?
+                            ORDER BY b.id DESC
+                        ");
+                        $stmt_b->execute([$_SESSION['user_id']]);
+                        $user_bookmarks = $stmt_b->fetchAll();
+
+                        if (!empty($user_bookmarks)):
+                        ?>
+                            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:15px;">
+                                <?php foreach ($user_bookmarks as $ub): ?>
+                                    <div style="background:rgba(30, 27, 36, 0.65); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:15px; display:flex; flex-direction:column; justify-content:space-between; gap:12px; transition: border-color 0.2s;">
+                                        <div style="display:flex; gap:12px; align-items:flex-start;">
+                                            <img src="<?php echo htmlspecialchars($ub['cover_image'] ?: 'https://placehold.co/100x150'); ?>" style="width:50px; height:70px; object-fit:cover; border-radius:6px; border:1px solid #444;" />
+                                            <div style="flex:1;">
+                                                <a href="details.php?id=<?php echo $ub['manga_id']; ?>" style="text-decoration:none;">
+                                                    <h4 style="font-size:13px; font-weight:bold; color:white; line-height:1.4; margin:0 0 4px 0;"><?php echo htmlspecialchars($ub['title']); ?> 👁️</h4>
+                                                </a>
+                                                <div style="font-size:11px; margin-top:4px;">
+                                                    <span style="display:inline-block; width:6px; height:6px; background:#03dac6; border-radius:50%; margin-left:4px;"></span>
+                                                    <strong style="color:#03dac6;"><?php echo htmlspecialchars($ub['status'] === 'Reading' ? 'در حال خوندن 🟢' : ($ub['status'] === 'Completed' ? 'تموم شده 🏆' : 'علاقه‌مندی ⭐')); ?></strong>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div style="display:flex; gap:8px; width:100%;">
+                                            <form action="" method="POST" style="margin:0; padding:0; background:transparent; border:none; flex:1;">
+                                                <input type="hidden" name="cycle_manga_id" value="<?php echo $ub['manga_id']; ?>">
+                                                <input type="hidden" name="current_status" value="<?php echo htmlspecialchars($ub['status']); ?>">
+                                                <button type="submit" name="cycle_status_web" class="btn btn-sm" style="font-size:10px; padding:6px; background:#f59e0b; color:black; font-weight:bold; border-radius:6px; border:none; width:100%; cursor:pointer;">تغییر وضعیت 🔄</button>
+                                            </form>
+                                            <form action="" method="POST" style="margin:0; padding:0; background:transparent; border:none; flex:1;">
+                                                <input type="hidden" name="remove_manga_id" value="<?php echo $ub['manga_id']; ?>">
+                                                <button type="submit" name="remove_bookmark_web" class="btn btn-sm" style="font-size:10px; padding:6px; background:#b71c1c; color:white; font-weight:bold; border-radius:6px; border:none; width:100%; cursor:pointer;">حذف نشانک 🗑️</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php else: ?>
+                            <div style="text-align:center; padding:30px; border:1px dashed rgba(255,255,255,0.1); border-radius:8px; background:rgba(255,255,255,0.01);">
+                                <p style="color:#666; margin:0; font-size:13px;">هنوز هیچ مانهوایی را به نشانک‌های خود اضافه نکرده‌اید!</p>
+                                <a href="." style="color:#bb86fc; font-weight:bold; text-decoration:none; font-size:12px; display:inline-block; margin-top:8px;">برو به صفحه اصلی و انتخاب مانهوا ⭐</a>
+                            </div>
+                        <?php endif; ?>
                     </div>
 
                     <!-- Cache and System Sync System -->

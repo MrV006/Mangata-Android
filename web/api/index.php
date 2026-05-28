@@ -712,6 +712,124 @@ try {
             api_send_success(['message' => 'کاربر به همراه تمامی پرونده‌ها از پایگاه داده با موفقیت حذف گردید.']);
             break;
 
+        // ================= BOOKMARKS & WALLET SYSTEM =================
+        case 'bookmark/list':
+            $user_id = isset($params['user_id']) ? (int)$params['user_id'] : 0;
+            if ($user_id <= 0) {
+                api_send_error('شناسه کاربر نامعتبر است.');
+            }
+            $stmt = $pdo->prepare("
+                SELECT b.status, b.created_at, m.* 
+                FROM mangata_bookmarks b 
+                JOIN mangata_mangas m ON b.manga_id = m.id 
+                WHERE b.user_id = ? 
+                ORDER BY b.id DESC
+            ");
+            $stmt->execute([$user_id]);
+            $bookmarks = [];
+            while ($row = $stmt->fetch()) {
+                $bookmarks[] = [
+                    'manga' => [
+                        'id' => (int)$row['id'],
+                        'title' => $row['title'],
+                        'description' => $row['description'],
+                        'cover_image' => $row['cover_image'] ? $row['cover_image'] : null,
+                        'genres' => $row['genres'] ?? '',
+                        'release_year' => $row['release_year'] ?? '',
+                        'main_characters' => $row['main_characters'] ?? '',
+                        'author' => $row['author'] ?? '',
+                        'created_at' => $row['created_at']
+                    ],
+                    'status' => $row['status'],
+                    'created_at' => $row['created_at']
+                ];
+            }
+            api_send_success($bookmarks);
+            break;
+
+        case 'bookmark/toggle':
+            $user_id = isset($params['user_id']) ? (int)$params['user_id'] : 0;
+            $manga_id = isset($params['manga_id']) ? (int)$params['manga_id'] : 0;
+            $status = trim($params['status'] ?? 'Reading');
+
+            if ($user_id <= 0 || $manga_id <= 0) {
+                api_send_error('پارامترهای آیدی کاربر یا مانهوا نامعتبر است.');
+            }
+
+            // Check if exists
+            $stmt = $pdo->prepare("SELECT id FROM mangata_bookmarks WHERE user_id = ? AND manga_id = ?");
+            $stmt->execute([$user_id, $manga_id]);
+            $existing_id = $stmt->fetchColumn();
+
+            if ($existing_id) {
+                $stmt = $pdo->prepare("DELETE FROM mangata_bookmarks WHERE id = ?");
+                $stmt->execute([$existing_id]);
+                api_send_success(['bookmarked' => false, 'message' => 'اثر با موفقیت از علاقه‌مندی‌ها حذف شد.']);
+            } else {
+                $stmt = $pdo->prepare("INSERT INTO mangata_bookmarks (user_id, manga_id, status) VALUES (?, ?, ?)");
+                $stmt->execute([$user_id, $manga_id, $status]);
+                api_send_success(['bookmarked' => true, 'message' => 'اثر با موفقیت به علاقه‌مندی‌ها اضافه شد.']);
+            }
+            break;
+
+        case 'bookmark/update-status':
+            $user_id = isset($params['user_id']) ? (int)$params['user_id'] : 0;
+            $manga_id = isset($params['manga_id']) ? (int)$params['manga_id'] : 0;
+            $status = trim($params['status'] ?? 'Reading');
+
+            if ($user_id <= 0 || $manga_id <= 0 || empty($status)) {
+                api_send_error('ورودی‌های معتبرسازی وضعیت علاقه‌مندی نامعتبر است.');
+            }
+
+            $stmt = $pdo->prepare("UPDATE mangata_bookmarks SET status = ? WHERE user_id = ? AND manga_id = ?");
+            $stmt->execute([$status, $user_id, $manga_id]);
+            api_send_success(['message' => 'وضعیت مطالعه مانهوا با موفقیت بروزرسانی شد.']);
+            break;
+
+        case 'wallet/get':
+            $user_id = isset($params['user_id']) ? (int)$params['user_id'] : 0;
+            if ($user_id <= 0) {
+                api_send_error('شناسه کاربر نامعتبر است.');
+            }
+            $stmt = $pdo->prepare("SELECT wallet_balance FROM mangata_users WHERE id = ?");
+            $stmt->execute([$user_id]);
+            $balance = $stmt->fetchColumn();
+            if ($balance === false) {
+                api_send_error('کاربر یافت نشد.');
+            }
+            api_send_success(['wallet_balance' => (int)$balance]);
+            break;
+
+        case 'wallet/charge':
+            $user_id = isset($params['user_id']) ? (int)$params['user_id'] : 0;
+            $amount = isset($params['amount']) ? (int)$params['amount'] : 0;
+
+            if ($user_id <= 0 || $amount <= 0) {
+                api_send_error('شناسه کاربر یا مقدار تراکنش شارژ الزامی است.');
+            }
+
+            $stmt = $pdo->prepare("UPDATE mangata_users SET wallet_balance = wallet_balance + ? WHERE id = ?");
+            $stmt->execute([$amount, $user_id]);
+
+            $stmt = $pdo->prepare("SELECT wallet_balance FROM mangata_users WHERE id = ?");
+            $stmt->execute([$user_id]);
+            $new_balance = $stmt->fetchColumn();
+
+            api_send_success([
+                'wallet_balance' => (int)$new_balance,
+                'message' => 'کیف پول شما با موفقیت به مقدار ' . number_format($amount) . ' تومان شارژ شد!'
+            ]);
+            break;
+
+        case 'auth/update-profile-image':
+            $user_id = isset($params['user_id']) ? (int)$params['user_id'] : 0;
+            if ($user_id <= 0) {
+                api_send_error('شناسه کاربر نامعتبر است.');
+            }
+            // For now, allow quick sync mockup or save profile url
+            api_send_success(['message' => 'تصویر پروفایل با موفقیت تغییر کرد.']);
+            break;
+
         default:
             api_send_error('مسیر درخواست API نامعتبر است: ' . $path, 404);
             break;

@@ -94,3 +94,10 @@ data class AppSettingsResponse(
     @SerializedName("force_update_web_version") val forceUpdateWebVersion: String,
     @SerializedName("force_update_web_msg") val forceUpdateWebMsg: String
 )
+
+data class BookmarkItem(
+    @SerializedName("manga") val manga: MangaItem,
+    @SerializedName("status") val status: String,
+    @SerializedName("created_at") val createdAt: String
+)
+

@@ -189,6 +189,7 @@ class MainActivity : ComponentActivity() {
                                 else -> {
                                     // Primary HOME dashboard
                                     HomeScreenContent(
+                                        viewModel = viewModel,
                                         userRole = user.role,
                                         username = user.username,
                                         mangas = mangas,
@@ -575,6 +576,7 @@ fun AuthScreen(
 // 2. Dashboards Composables
 @Composable
 fun HomeScreenContent(
+    viewModel: com.example.ui.MangaViewModel,
     userRole: String,
     username: String,
     mangas: List<MangaItem>,
@@ -589,6 +591,9 @@ fun HomeScreenContent(
     onTriggerCacheClear: () -> Unit,
     onSearch: (String?, String?, String?, String?) -> Unit
 ) {
+    val walletBalance by viewModel.walletBalance.collectAsState()
+    val bookmarks by viewModel.bookmarks.collectAsState()
+
     var searchText by remember { mutableStateOf("") }
     var selectedGenre by remember { mutableStateOf("") }
     var selectedYear by remember { mutableStateOf("") }
@@ -772,7 +777,7 @@ fun HomeScreenContent(
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Text(
-                                    text = "👤 پروفایل کاربری من و بهینه سازی کش",
+                                    text = "👤 پروفایل من، نشانک‌ها و کیف پول",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
                                     color = Color.White
@@ -790,19 +795,215 @@ fun HomeScreenContent(
                             Divider(color = Color.White.copy(alpha = 0.1f))
                             Spacer(modifier = Modifier.height(12.dp))
 
+                            // 1. User Specs + Avatar Row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(54.dp)
+                                        .clip(RoundedCornerShape(27.dp))
+                                        .background(Color(0xFFBB86FC).copy(alpha = 0.2f))
+                                        .border(2.dp, Color(0xFFBB86FC), RoundedCornerShape(27.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = username.take(2).uppercase(),
+                                        color = Color(0xFFBB86FC),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "نام کاربری شما: $username",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "سطح دسترسی: ${translateRole(userRole)}",
+                                        fontSize = 11.sp,
+                                        color = Color.LightGray
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(15.dp))
+                            Divider(color = Color.White.copy(alpha = 0.05f))
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // 2. Real-time Wallet Section
                             Text(
-                                text = "نام کاربری شما: $username",
-                                fontSize = 13.sp,
-                                color = Color.LightGray,
+                                text = "🪙 موجودی حساب و شارژ کیف پول",
+                                color = Color(0xFFFFD54F),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
                                 modifier = Modifier.padding(bottom = 6.dp)
                             )
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF14101A)),
+                                border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.25f))
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "موجودی کیف پول دیجیتال:",
+                                            fontSize = 12.sp,
+                                            color = Color.LightGray
+                                        )
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = String.format("%,d", walletBalance),
+                                                fontWeight = FontWeight.Black,
+                                                fontSize = 18.sp,
+                                                color = Color(0xFFF59E0B)
+                                            )
+                                            Text(
+                                                text = "تومان",
+                                                fontSize = 11.sp,
+                                                color = Color.LightGray
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    Button(
+                                        onClick = { viewModel.chargeWallet() },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
+                                        contentPadding = PaddingValues(vertical = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = "💡 شارژ حساب (۱۵,۰۰۰ تومان)",
+                                            color = Color.Black,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(15.dp))
+                            Divider(color = Color.White.copy(alpha = 0.05f))
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // 3. Real-time Bookmarks Section
                             Text(
-                                text = "سطح دسترسی شما در پلتفرم: ${translateRole(userRole)}",
-                                fontSize = 13.sp,
-                                color = Color.LightGray,
-                                modifier = Modifier.padding(bottom = 12.dp)
+                                text = "📌 نشانک‌های محبوب شما در وبسایت و اپلیکیشن",
+                                color = Color(0xFFBB86FC),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(bottom = 8.dp)
                             )
 
+                            if (bookmarks.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color.White.copy(alpha = 0.02f), RoundedCornerShape(8.dp))
+                                        .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)), RoundedCornerShape(8.dp))
+                                        .padding(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "تاکنون هیچ مانهوایی را نشانک نکرده‌اید.",
+                                        fontSize = 11.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    bookmarks.forEach { b ->
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = CardDefaults.cardColors(containerColor = Color(0xFF14101A)),
+                                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(8.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = b.manga.title,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 12.sp,
+                                                        color = Color.White
+                                                    )
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = "وضعیت: " + when(b.status) {
+                                                            "Reading" -> "در حال مطالعه 🟢"
+                                                            "Completed" -> "تکمیل شده 🏆"
+                                                            else -> "محبوب ⭐"
+                                                        },
+                                                        fontSize = 10.sp,
+                                                        color = Color(0xFFBB86FC)
+                                                    )
+                                                }
+                                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                    Button(
+                                                        onClick = {
+                                                            val nextStatus = when(b.status) {
+                                                                "Reading" -> "Completed"
+                                                                "Completed" -> "Favorite"
+                                                                else -> "Reading"
+                                                            }
+                                                            viewModel.updateBookmarkStatus(b.manga.id, nextStatus)
+                                                        },
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF03DAC6)),
+                                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                                        modifier = Modifier.height(28.dp)
+                                                    ) {
+                                                        Text("وضعیت 🔄", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                    IconButton(
+                                                        onClick = { viewModel.toggleBookmark(b.manga.id) },
+                                                        modifier = Modifier.size(28.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Delete,
+                                                            contentDescription = "Remove",
+                                                            tint = Color.Red,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(15.dp))
+                            Divider(color = Color.White.copy(alpha = 0.1f))
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // 4. Update Cache Button
                             Button(
                                 onClick = onTriggerCacheClear,
                                 modifier = Modifier

@@ -32,6 +32,7 @@ function mangata_init_database($pdo) {
         password_hash varchar(255) NOT NULL,
         role varchar(50) DEFAULT 'subscriber' NOT NULL,
         session_token varchar(255) DEFAULT NULL,
+        wallet_balance bigint(20) DEFAULT 2800 NOT NULL,
         created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
         PRIMARY KEY (id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
@@ -39,6 +40,13 @@ function mangata_init_database($pdo) {
     // Add session_token column to mangata_users if not exists (for existing database migration)
     try {
         $pdo->exec("ALTER TABLE mangata_users ADD COLUMN session_token varchar(255) DEFAULT NULL;");
+    } catch (Exception $e) {
+        // Safe to ignore if already exists
+    }
+
+    // Add wallet_balance column to mangata_users if not exists
+    try {
+        $pdo->exec("ALTER TABLE mangata_users ADD COLUMN wallet_balance bigint(20) DEFAULT 2800 NOT NULL;");
     } catch (Exception $e) {
         // Safe to ignore if already exists
     }
@@ -111,6 +119,17 @@ function mangata_init_database($pdo) {
         setting_key varchar(100) NOT NULL UNIQUE,
         setting_value text NOT NULL,
         PRIMARY KEY (setting_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
+    // 7. Bookmarks Table
+    $pdo->exec("CREATE TABLE IF NOT EXISTS mangata_bookmarks (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        user_id bigint(20) NOT NULL,
+        manga_id bigint(20) NOT NULL,
+        status varchar(50) DEFAULT 'Reading' NOT NULL,
+        created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY user_manga (user_id, manga_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
     // Seed default settings if empty

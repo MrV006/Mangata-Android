@@ -75,4 +75,29 @@ interface MangaApiService {
     suspend fun assignStaff(
         @Body request: StaffAssignmentRequest
     ): ApiResponse<Map<String, String>>
+
+    @GET("bookmark/list")
+    suspend fun listBookmarks(
+        @Query("user_id") userId: Int
+    ): ApiResponse<List<BookmarkItem>>
+
+    @POST("bookmark/toggle")
+    suspend fun toggleBookmark(
+        @Body request: Map<String, Int>
+    ): ApiResponse<Map<String, String>>
+
+    @POST("bookmark/update-status")
+    suspend fun updateBookmarkStatus(
+        @Body request: Map<String, String>
+    ): ApiResponse<Map<String, String>>
+
+    @GET("wallet/get")
+    suspend fun getWalletBalance(
+        @Query("user_id") userId: Int
+    ): ApiResponse<Map<String, Int>>
+
+    @POST("wallet/charge")
+    suspend fun chargeWallet(
+        @Body request: Map<String, Int>
+    ): ApiResponse<Map<String, String>>
 }

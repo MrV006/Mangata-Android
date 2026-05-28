@@ -43,6 +43,12 @@ class MangaViewModel(application: Application) : AndroidViewModel(application) {
     private val _isForceUpdateRequired = MutableStateFlow(false)
     val isForceUpdateRequired: StateFlow<Boolean> = _isForceUpdateRequired.asStateFlow()
 
+    private val _bookmarks = MutableStateFlow<List<BookmarkItem>>(emptyList())
+    val bookmarks: StateFlow<List<BookmarkItem>> = _bookmarks.asStateFlow()
+
+    private val _walletBalance = MutableStateFlow<Int>(0)
+    val walletBalance: StateFlow<Int> = _walletBalance.asStateFlow()
+
     init {
         // Load persist user session first
         viewModelScope.launch {
@@ -189,6 +195,11 @@ class MangaViewModel(application: Application) : AndroidViewModel(application) {
             if (result.isSuccess) {
                 val list = result.getOrNull() ?: emptyList()
                 _mangas.value = list
+                
+                // Fetch user bookmarks and wallet balance
+                fetchBookmarks()
+                fetchWalletBalance()
+
                 // Real-time background chapter fetching for elite quick home readings!
                 list.forEach { manga ->
                     fetchChapters(manga.id)
@@ -301,6 +312,73 @@ class MangaViewModel(application: Application) : AndroidViewModel(application) {
             _isLoading.value = false
             if (result.isSuccess) {
                 _successMessage.value = result.getOrNull()
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message
+            }
+        }
+    }
+
+    // 12. Bookmarks Logic
+    fun fetchBookmarks() {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            val result = repository.getBookmarks(user.id)
+            if (result.isSuccess) {
+                _bookmarks.value = result.getOrNull() ?: emptyList()
+            }
+        }
+    }
+
+    fun fetchWalletBalance() {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            val result = repository.walletGetBalance(user.id)
+            if (result.isSuccess) {
+                _walletBalance.value = result.getOrNull() ?: 0
+            }
+        }
+    }
+
+    fun toggleBookmark(mangaId: Int) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = repository.toggleBookmark(user.id, mangaId)
+            _isLoading.value = false
+            if (result.isSuccess) {
+                _successMessage.value = result.getOrNull()
+                fetchBookmarks()
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message
+            }
+        }
+    }
+
+    fun updateBookmarkStatus(mangaId: Int, status: String) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = repository.updateBookmarkStatus(user.id, mangaId, status)
+            _isLoading.value = false
+            if (result.isSuccess) {
+                _successMessage.value = result.getOrNull()
+                fetchBookmarks()
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message
+            }
+        }
+    }
+
+    fun chargeWallet() {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = repository.walletCharge(user.id, 15000)
+            _isLoading.value = false
+            if (result.isSuccess) {
+                val newBal = result.getOrNull() ?: 0
+                _walletBalance.value = newBal
+                _successMessage.value = "🪙 شارژ موفقیت‌آمیز! کیف پول شما ۱۵,۰۰۰ تومان شارژ شد."
             } else {
                 _errorMessage.value = result.exceptionOrNull()?.message
             }

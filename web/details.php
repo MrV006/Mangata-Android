@@ -42,6 +42,48 @@ $stmt_staff = $pdo->prepare("
 $stmt_staff->execute([$manga_id]);
 $allocated_staff = $stmt_staff->fetchAll();
 $allocated_staff = $allocated_staff ?: [];
+
+// Check bookmark info
+$is_bookmarked = false;
+$bookmark_status = '';
+if (is_logged_in()) {
+    $stmt_b = $pdo->prepare("SELECT status FROM mangata_bookmarks WHERE user_id = ? AND manga_id = ?");
+    $stmt_b->execute([$_SESSION['user_id'], $manga_id]);
+    $bookmark_row = $stmt_b->fetch();
+    if ($bookmark_row) {
+        $is_bookmarked = true;
+        $bookmark_status = $bookmark_row['status'];
+    }
+}
+
+// Handle Bookmark POST Toggle
+if (isset($_POST['toggle_bookmark_action']) && is_logged_in()) {
+    if ($is_bookmarked) {
+        $stmt_del = $pdo->prepare("DELETE FROM mangata_bookmarks WHERE user_id = ? AND manga_id = ?");
+        $stmt_del->execute([$_SESSION['user_id'], $manga_id]);
+        $is_bookmarked = false;
+    } else {
+        $stmt_ins = $pdo->prepare("INSERT INTO mangata_bookmarks (user_id, manga_id, status) VALUES (?, ?, 'Reading')");
+        $stmt_ins->execute([$_SESSION['user_id'], $manga_id]);
+        $is_bookmarked = true;
+        $bookmark_status = 'Reading';
+    }
+    header("Location: details.php?id=" . $manga_id);
+    exit;
+}
+
+if (isset($_POST['cycle_bookmark_status_action']) && is_logged_in() && $is_bookmarked) {
+    $next_status = 'Reading';
+    if ($bookmark_status === 'Reading') {
+        $next_status = 'Completed';
+    } else if ($bookmark_status === 'Completed') {
+        $next_status = 'Favorite';
+    }
+    $stmt_up = $pdo->prepare("UPDATE mangata_bookmarks SET status = ? WHERE user_id = ? AND manga_id = ?");
+    $stmt_up->execute([$next_status, $_SESSION['user_id'], $manga_id]);
+    header("Location: details.php?id=" . $manga_id);
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -236,6 +278,23 @@ $allocated_staff = $allocated_staff ?: [];
             </div>
             <?php if (!empty($manga['main_characters'])): ?>
                 <p style="color:#03dac6; font-size:13px; margin:12px 0 0 0; font-weight:bold; text-shadow:0 2px 4px rgba(0,0,0,0.6);">🌟 شخصیت‌های اصلی: <span style="color:#e0e0e0; font-weight:normal;"><?php echo htmlspecialchars($manga['main_characters']); ?></span></p>
+            <?php endif; ?>
+
+            <?php if (is_logged_in()): ?>
+                <div style="margin-top:20px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; z-index:100; position:relative;">
+                    <form action="" method="POST" style="margin:0; padding:0; background:transparent; border:none; display:inline-block;">
+                        <button type="submit" name="toggle_bookmark_action" class="btn" style="background:<?php echo $is_bookmarked ? '#b71c1c' : '#7c4dff'; ?>; color:white; font-weight:bold; padding:10px 18px; border-radius:30px; border:none; font-size:13px; cursor:pointer;" class="btn-bookmark">
+                            <?php echo $is_bookmarked ? '❌ حذف از نشانک‌ها' : '📌 اضافه به نشانک‌ها (علاقه‌مندی)'; ?>
+                        </button>
+                    </form>
+                    <?php if ($is_bookmarked): ?>
+                        <form action="" method="POST" style="margin:0; padding:0; background:transparent; border:none; display:inline-block;">
+                            <button type="submit" name="cycle_bookmark_status_action" class="btn" style="background:#f59e0b; color:black; font-weight:bold; padding:10px 18px; border-radius:30px; border:none; font-size:13px; cursor:pointer;">
+                                🔄 وضعیت: <?php echo htmlspecialchars($bookmark_status === 'Reading' ? 'در حال خواندن 🟢' : ($bookmark_status === 'Completed' ? 'خوانده شده 🏆' : 'علاقه‌مندی ⭐')); ?>
+                            </button>
+                        </form>
+                    <?php endif; ?>
+                </div>
             <?php endif; ?>
         </div>
     </div>

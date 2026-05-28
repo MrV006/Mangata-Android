@@ -315,4 +315,81 @@ class MangaRepository(private val db: MangaDatabase) {
         dao.clearMangaCache()
         dao.clearChapterCache()
     }
+
+    // 12. Bookmarks Logic
+    suspend fun getBookmarks(userId: Int): Result<List<BookmarkItem>> {
+        return try {
+            val response = api.listBookmarks(userId)
+            if (response.status == "success" && response.data != null) {
+                Result.success(response.data)
+            } else {
+                Result.failure(Exception(response.message ?: "خطا در دریافت لیست نشانک‌ها"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun toggleBookmark(userId: Int, mangaId: Int): Result<String> {
+        return try {
+            val payload = mapOf("user_id" to userId, "manga_id" to mangaId)
+            val response = api.toggleBookmark(payload)
+            if (response.status == "success" && response.data != null) {
+                Result.success(response.data["message"] ?: "تغییر وضعیت نشانک انجام شد.")
+            } else {
+                Result.failure(Exception(response.message ?: "خطا در برقراری وضعیت نشانک"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateBookmarkStatus(userId: Int, mangaId: Int, status: String): Result<String> {
+        return try {
+            val payload = mapOf("user_id" to userId.toString(), "manga_id" to mangaId.toString(), "status" to status)
+            val response = api.updateBookmarkStatus(payload)
+            if (response.status == "success") {
+                Result.success(response.message ?: "وضعیت نشانک مانهوا با موفقیت آپدیت شد.")
+            } else {
+                Result.failure(Exception(response.message ?: "خطا در به روزرسانی نشانک"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // 13. Wallet Logic
+    suspend fun walletGetBalance(userId: Int): Result<Int> {
+        return try {
+            val response = api.getWalletBalance(userId)
+            if (response.status == "success" && response.data != null) {
+                val balance = response.data["wallet_balance"] ?: 0
+                Result.success(balance)
+            } else {
+                Result.failure(Exception(response.message ?: "خطا در دریافت موجودی"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun walletCharge(userId: Int, amount: Int): Result<Int> {
+        return try {
+            val payload = mapOf("user_id" to userId, "amount" to amount)
+            val response = api.chargeWallet(payload)
+            if (response.status == "success" && response.data != null) {
+                // Here is return new balance, we can also extract or parse it to Int if it has double quotes
+                val rawBal = response.data["wallet_balance"] ?: "0"
+                val newBal = when(rawBal) {
+                    is Number -> rawBal.toInt()
+                    else -> rawBal.toString().toIntOrNull() ?: 0
+                }
+                Result.success(newBal)
+            } else {
+                Result.failure(Exception(response.message ?: "خطا در شارژ کیف پول"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
