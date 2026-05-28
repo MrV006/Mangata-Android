@@ -101,3 +101,24 @@ data class BookmarkItem(
     @SerializedName("created_at") val createdAt: String
 )
 
+// Dynamic Blog & Critique Reviews Data Models
+data class BlogItem(
+    @SerializedName("id") val id: Int,
+    @SerializedName("title") val title: String,
+    @SerializedName("excerpt") val excerpt: String,
+    @SerializedName("content") val content: String,
+    @SerializedName("image_url") val imageUrl: String?,
+    @SerializedName("created_at") val createdAt: String
+)
+
+data class ReviewItem(
+    @SerializedName("id") val id: Int,
+    @SerializedName("user_id") val userId: Int,
+    @SerializedName("username") val username: String,
+    @SerializedName("manga_id") val mangaId: Int,
+    @SerializedName("manga_title") val mangaTitle: String,
+    @SerializedName("rating") val rating: Int,
+    @SerializedName("review_text") val reviewText: String,
+    @SerializedName("created_at") val createdAt: String
+)
+

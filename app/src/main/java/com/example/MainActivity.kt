@@ -593,6 +593,8 @@ fun HomeScreenContent(
 ) {
     val walletBalance by viewModel.walletBalance.collectAsState()
     val bookmarks by viewModel.bookmarks.collectAsState()
+    val blogs by viewModel.blogs.collectAsState()
+    val reviews by viewModel.reviews.collectAsState()
 
     var searchText by remember { mutableStateOf("") }
     var selectedGenre by remember { mutableStateOf("") }
@@ -1206,96 +1208,536 @@ fun HomeScreenContent(
                 }
             }
 
-            // 🏆 PRE-LOAD FEATURED WEEKLY SLIDE (Connected to live database)
-            val featuredManga = mangas.firstOrNull()
-            if (featuredManga != null) {
+
+            // 🏆 LUXURY REDESIGNED DYNAMIC HERO SLIDER WITH INDICATORS
+            if (mangas.isNotEmpty()) {
                 item {
-                    Text(
-                        text = "🔥 مانهوای برگزیده هفته (پورتال مانگاتا)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF03DAC6),
-                        modifier = Modifier.padding(bottom = 2.dp)
-                    )
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp)
-                            .clickable { onSelectManga(featuredManga) },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B24)),
-                        border = BorderStroke(1.2.dp, Brush.horizontalGradient(listOf(Color(0xFF03DAC6), Color(0xFFBB86FC))))
+                    val sliderItems = mangas.take(3)
+                    var currentSlideIndex by remember { mutableStateOf(0) }
+                    val activeManga = sliderItems[currentSlideIndex]
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            val coverUrl = featuredManga.coverImage
-                            if (!coverUrl.isNullOrEmpty()) {
-                                AsyncImage(
-                                    model = coverUrl,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop,
-                                    alpha = 0.35f
-                                )
-                            }
-                            
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors = listOf(
-                                                Color.Transparent,
-                                                Color.Black.copy(alpha = 0.85f)
-                                            )
-                                        )
-                                    )
-                            )
-                            
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(14.dp),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                verticalAlignment = Alignment.Bottom
-                            ) {
+                        Text(
+                            text = "🔥 مانهواهای برگزیده هفته (پورتال مانگاتا)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFBB86FC),
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        )
+                        
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clickable { onSelectManga(activeManga) },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B24)),
+                            border = BorderStroke(1.2.dp, Brush.horizontalGradient(listOf(Color(0xFF03DAC6), Color(0xFFBB86FC))))
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                val coverUrl = activeManga.coverImage
                                 if (!coverUrl.isNullOrEmpty()) {
                                     AsyncImage(
                                         model = coverUrl,
-                                        contentDescription = featuredManga.title,
-                                        modifier = Modifier
-                                            .width(70.dp)
-                                            .height(100.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(8.dp)),
-                                        contentScale = ContentScale.Crop
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop,
+                                        alpha = 0.35f
                                     )
                                 }
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                colors = listOf(
+                                                    Color.Transparent,
+                                                    Color.Black.copy(alpha = 0.9f)
+                                                )
+                                            )
+                                        )
+                                )
+                                
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(14.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                    verticalAlignment = Alignment.Bottom
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(30.dp))
-                                            .background(Color(0xFF03DAC6))
-                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    if (!coverUrl.isNullOrEmpty()) {
+                                        AsyncImage(
+                                            model = coverUrl,
+                                            contentDescription = activeManga.title,
+                                            modifier = Modifier
+                                                .width(75.dp)
+                                                .height(110.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Text("🏆 رتبه اول کاربری", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(30.dp))
+                                                .background(Color(0xFF03DAC6))
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "🏆 رتبه ${currentSlideIndex + 1} کاربری",
+                                                color = Color.Black,
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        
+                                        Text(
+                                            text = activeManga.title,
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 18.sp,
+                                            color = Color.White
+                                        )
+                                        
+                                        Text(
+                                            text = activeManga.description,
+                                            fontSize = 11.sp,
+                                            color = Color.LightGray,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            lineHeight = 16.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Slider Controls
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = {
+                                currentSlideIndex = (currentSlideIndex - 1 + sliderItems.size) % sliderItems.size
+                            }, modifier = Modifier.size(28.dp)) {
+                                Icon(imageVector = Icons.Default.KeyboardArrowRight, contentDescription = "Next", tint = Color.White)
+                            }
+                            
+                            sliderItems.forEachIndexed { idx, _ ->
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 4.dp)
+                                        .size(if (idx == currentSlideIndex) 10.dp else 6.dp)
+                                        .clip(RoundedCornerShape(30.dp))
+                                        .background(if (idx == currentSlideIndex) Color(0xFF03DAC6) else Color.Gray)
+                                )
+                            }
+                            
+                            IconButton(onClick = {
+                                currentSlideIndex = (currentSlideIndex + 1) % sliderItems.size
+                            }, modifier = Modifier.size(28.dp)) {
+                                Icon(imageVector = Icons.Default.KeyboardArrowLeft, contentDescription = "Prev", tint = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 🆕 HORIZONTAL CAROUSEL FOR NEWEST WORKS
+            item {
+                Text(
+                    text = "✨ جدیدترین آثار افزوده شده به مانهوای مانگاتا",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.LightGray
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                androidx.compose.foundation.lazy.LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val newestMangas = mangas.take(6)
+                    items(newestMangas) { manga ->
+                        Card(
+                            modifier = Modifier
+                                .width(120.dp)
+                                .clickable { onSelectManga(manga) },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF14101A)),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                        ) {
+                            Column {
+                                Box(modifier = Modifier.height(130.dp).fillMaxWidth()) {
+                                    val coverUrl = manga.coverImage
+                                    if (!coverUrl.isNullOrEmpty()) {
+                                        AsyncImage(
+                                            model = coverUrl,
+                                            contentDescription = manga.title,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
                                     }
                                     
-                                    Text(
-                                        text = featuredManga.title,
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 18.sp,
-                                        color = Color.White
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
+                                                )
+                                            )
                                     )
-                                    
+                                }
+                                Column(modifier = Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(
-                                        text = featuredManga.description,
+                                        text = manga.title,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp,
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = manga.author ?: "نامعلوم",
+                                        fontSize = 8.sp,
+                                        color = Color.Gray,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 👑 PREMIUM BANNER PROMO CARD
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1A120B)),
+                    border = BorderStroke(1.dp, Color(0xFFE5A93B).copy(alpha = 0.3f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "👑 عضویت ویژه طلایی مانگاتا",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 14.sp,
+                                color = Color(0xFFE5A93B)
+                            )
+                            Text(
+                                text = "با ارتقاء حساب خود، بدون تبلیغات و با دانلود رایگان چپترهای قفل دار به آرشیو مانگاتا دسترسی سریع پیدا کنید.",
+                                fontSize = 10.sp,
+                                color = Color.White.copy(alpha = 0.8f),
+                                lineHeight = 16.sp
+                            )
+                        }
+                        Button(
+                            onClick = { viewModel.chargeWallet() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5A93B)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text("ارتقاء حساب 🌟", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold)
+                        }
+                    }
+                }
+            }
+
+            // 📰 DYNAMIC BLOG HUB
+            item {
+                Text(
+                    text = "📰 وبلاگ و آخرین اخبار دنیای مانهوا (همگام)",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                if (blogs.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White.copy(alpha = 0.02f), RoundedCornerShape(12.dp))
+                            .padding(14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("در حال بارگیری اخبار وبلاگ...", color = Color.Gray, fontSize = 11.sp)
+                    }
+                } else {
+                    var selectedBlogForModal by remember { mutableStateOf<com.example.data.BlogItem?>(null) }
+                    
+                    if (selectedBlogForModal != null) {
+                        AlertDialog(
+                            onDismissRequest = { selectedBlogForModal = null },
+                            title = {
+                                Text(
+                                    text = selectedBlogForModal!!.title,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = Color(0xFFBB86FC)
+                                )
+                            },
+                            text = {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxWidth().height(250.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    val img = selectedBlogForModal!!.imageUrl
+                                    if (!img.isNullOrEmpty()) {
+                                        item {
+                                            AsyncImage(
+                                                model = img,
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(8.dp)),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        }
+                                    }
+                                    item {
+                                        Text(
+                                            text = selectedBlogForModal!!.content,
+                                            fontSize = 12.sp,
+                                            color = Color.White,
+                                            lineHeight = 20.sp
+                                        )
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = { selectedBlogForModal = null },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF03DAC6))
+                                ) {
+                                    Text("بستن خبر 🔑", color = Color.Black)
+                                }
+                            }
+                        )
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        blogs.take(3).forEach { blog ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedBlogForModal = blog },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B24)),
+                                border = BorderStroke(1.dp, Color(0xFFBB86FC).copy(alpha = 0.15f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val img = blog.imageUrl
+                                    if (!img.isNullOrEmpty()) {
+                                        AsyncImage(
+                                            model = img,
+                                            contentDescription = blog.title,
+                                            modifier = Modifier
+                                                .size(60.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(
+                                            text = blog.title,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = blog.excerpt,
+                                            fontSize = 10.sp,
+                                            color = Color.LightGray,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            lineHeight = 14.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 💬 DYNAMIC CRITIQUE REVIEWS & SUBMISSION
+            item {
+                Text(
+                    text = "💬 نقدها، نمرات و دیدگاه‌های کاربران گرامی (همگام با وب)",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+
+                var reviewMangaSelection by remember { mutableStateOf<MangaItem?>(null) }
+                var ratingValue by remember { mutableStateOf(5) }
+                var reviewTextState by remember { mutableStateOf("") }
+                var showMangaDropdown by remember { mutableStateOf(false) }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF14101A)),
+                    border = BorderStroke(1.dp, Color(0xFF03DAC6).copy(alpha = 0.2f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "✍️ نوشتن نقد یا دیدگاه جدید در دیتابیس زنده",
+                            color = Color(0xFF03DAC6),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                        
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { showMangaDropdown = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = reviewMangaSelection?.title ?: "📂 انتخاب اثر جهت نقد",
+                                    fontSize = 10.sp,
+                                    color = Color.White
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showMangaDropdown,
+                                onDismissRequest = { showMangaDropdown = false }
+                            ) {
+                                mangas.forEach { m ->
+                                    DropdownMenuItem(
+                                        text = { Text(m.title) },
+                                        onClick = {
+                                            reviewMangaSelection = m
+                                            showMangaDropdown = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("امتیاز شما کاربرا:", fontSize = 10.sp, color = Color.LightGray)
+                            (1..5).forEach { star ->
+                                IconButton(
+                                    onClick = { ratingValue = star },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = null,
+                                        tint = if (star <= ratingValue) Color(0xFFFFD54F) else Color.Gray,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = reviewTextState,
+                            onValueChange = { reviewTextState = it },
+                            placeholder = { Text("متن نقد گرانبهای شما در مورد داستان...", fontSize = 10.sp) },
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF03DAC6),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().height(60.dp)
+                        )
+
+                        Button(
+                            onClick = {
+                                val selected = reviewMangaSelection ?: return@Button
+                                if (reviewTextState.isBlank()) return@Button
+                                viewModel.submitReview(selected.id, ratingValue, reviewTextState)
+                                reviewTextState = ""
+                                reviewMangaSelection = null
+                            },
+                            enabled = reviewMangaSelection != null && reviewTextState.isNotBlank(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF03DAC6)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("ارسال نقد به دیتابیس 🚀", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (reviews.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White.copy(alpha = 0.02f), RoundedCornerShape(12.dp))
+                            .padding(14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("تاکنون نقدی ثبت نشده است. اولین نقد را شما برای ما بنویسید!", color = Color.Gray, fontSize = 11.sp)
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        reviews.take(4).forEach { rx ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B24))
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "👤 ${rx.username} برای ${rx.mangaTitle}",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp,
+                                            color = Color.White
+                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            (1..5).forEach { star ->
+                                                Icon(
+                                                    imageVector = Icons.Default.Star,
+                                                    contentDescription = null,
+                                                    tint = if (star <= rx.rating) Color(0xFFFFD54F) else Color.Gray.copy(alpha = 0.2f),
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Text(
+                                        text = rx.reviewText,
                                         fontSize = 11.sp,
                                         color = Color.LightGray,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
                                         lineHeight = 16.sp
                                     )
                                 }

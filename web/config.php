@@ -132,6 +132,28 @@ function mangata_init_database($pdo) {
         UNIQUE KEY user_manga (user_id, manga_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 
+    // 8. Blog Table
+    $pdo->exec("CREATE TABLE IF NOT EXISTS mangata_blog (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        title varchar(255) NOT NULL,
+        excerpt varchar(255) NOT NULL,
+        content text NOT NULL,
+        image_url varchar(255) DEFAULT '' NOT NULL,
+        created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
+    // 9. Reviews Table
+    $pdo->exec("CREATE TABLE IF NOT EXISTS mangata_reviews (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        user_id bigint(20) NOT NULL,
+        manga_id bigint(20) NOT NULL,
+        rating int(11) NOT NULL,
+        review_text text NOT NULL,
+        created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
     // Seed default settings if empty
     $default_settings = [
         'force_update_app_active' => '0',
@@ -139,7 +161,9 @@ function mangata_init_database($pdo) {
         'force_update_app_msg' => 'نسخه جدید و حیاتی اپلیکیشن مانگاتا آماده دریافت است. لطفا جهت دسترسی مجدد به امکانات برنامه آن را به روز رسانی کنید.',
         'force_update_web_active' => '0',
         'force_update_web_version' => '1',
-        'force_update_web_msg' => 'به‌روزرسانی مهمی برای وب‌سایت مانگاتا در دیتابیس ثبت شده است. جهت ارتقاء ثبات سیستم، تمیزکننده عمیق کش و دارایی‌ها را اجرا کنید.'
+        'force_update_web_msg' => 'به‌روزرسانی مهمی برای وب‌سایت مانگاتا در دیتابیس ثبت شده است. جهت ارتقاء ثبات سیستم، تمیزکننده عمیق کش و دارایی‌ها را اجرا کنید.',
+        'promo_discount_text' => '٪۳۰ تخفیف داغ بهارانه روی خرید بسته‌‌های اعتباری و طلایی ترجمه؛ تنها با کدرهگیری فعال: MANGATA30',
+        'promo_discount_expiry' => '۱۴۰۵/۰۴/۱۵'
     ];
     foreach ($default_settings as $s_key => $s_val) {
         $stmt_set = $pdo->prepare("SELECT COUNT(*) FROM mangata_settings WHERE setting_key = ?");
@@ -147,6 +171,53 @@ function mangata_init_database($pdo) {
         if ($stmt_set->fetchColumn() == 0) {
             $ins_set = $pdo->prepare("INSERT INTO mangata_settings (setting_key, setting_value) VALUES (?, ?)");
             $ins_set->execute([$s_key, $s_val]);
+        }
+    }
+
+    // Seed default blog posts if empty
+    $stmt_blog_count = $pdo->query("SELECT COUNT(*) FROM mangata_blog");
+    if ($stmt_blog_count->fetchColumn() == 0) {
+        $blogs_seed = [
+            [
+                'شروع به کار تیم ترجمه مانگاتا با پروژه‌های فوق‌العاده داغ!',
+                'تیم ترجمه و گرافیک مانگاتا رسماً فعالیت خود را آغاز کرد. برای آشنایی با روند کار ترجمه این مطلب را دنبال کنید.',
+                'امروز بسیار خرسندیم که شروع رسمی رسانه مستقل و نوین مانگاتا را به اطلاع شما همراهان عزیز برسانیم! تیم ما متشکل از مترجمین باتجربه، کلینرهای گرافیکی درجه یک و تیمی فداکار برای ارائه سریع‌ترین و باکیفیت‌ترین ترجمه‌ها دور هم جمع شده‌اند. منتظر خبرهای بسیار هیجان‌انگیزتر باشید.',
+                'https://picsum.photos/id/101/600/400'
+            ],
+            [
+                'نحوه ثبت‌نام و پذیرش در آزمون استخدامی تیم طراحی',
+                'برای ثبت‌نام به عنوان کلینر، تایپ‌ستر یا طراح بازسازی حباب‌ها، مراحل ساده زیر را در چند دقیقه سپری فرمایید.',
+                'اگر دوست دارید در یک محیط پویا و حرفه‌ای همراه با تیم ما کار کنید، فرصت استخدام در سایت و اپلیکیشن هم‌اکنون به صورت کاملاً سینک و واقعی هموار است. با پاسخ به سوالات تئوری آزمون و آپلود نمونه کارهای خود از طریق پورتال استخدام، بلافاصله در صف تصحیح و نمره‌دهی زنده مدیریت قرار می‌گیرد!',
+                'https://picsum.photos/id/102/600/400'
+            ],
+            [
+                'پیش نمایش فصول جدید مانهواهای محبوب پلتفرم',
+                'لیست جدیدترین مانهواهایی که به زودی روی پورتال انتشار قرار خواهند گرفت را به صورت تصویر و پوستر مشاهده کنید.',
+                'تیم‌های واگذار شده در حال تلاش شبانه‌روزی برای تسریع آماده‌سازی چپترهای جدید مانهوا سولو لولینگ و سایر کارهای فانتزی هستند. به زودی از پیش‌نمایش بی‌نظیر آن‌ها و گزینه‌های حمایت مالی ویژه با کیف پول دیجیتال خود رونمایی خواهیم کرد.',
+                'https://picsum.photos/id/103/600/400'
+            ]
+        ];
+        foreach ($blogs_seed as $bg) {
+            $stmt_ins = $pdo->prepare("INSERT INTO mangata_blog (title, excerpt, content, image_url) VALUES (?, ?, ?, ?)");
+            $stmt_ins->execute($bg);
+        }
+    }
+
+    // Seed default reviews if empty
+    $stmt_rev_count = $pdo->query("SELECT COUNT(*) FROM mangata_reviews");
+    if ($stmt_rev_count->fetchColumn() == 0) {
+        // Find if any manga exists to link to, else just use manga_id = 1
+        $stmt_manga_exist = $pdo->query("SELECT id FROM mangata_mangas LIMIT 1");
+        $manga_id = $stmt_manga_exist->fetchColumn() ?: 1;
+
+        $reviews_seed = [
+            [1, $manga_id, 5, 'واقعاً ترجمه این مانهوا بی‌نظیر و روان است! کلین حباب‌ها فوق‌العاده تمیز و روان انجام شده است. دمتون گرم.'],
+            [1, $manga_id, 4, 'کیفیت طراحی و قرارگیری فونت‌ها واقعاً تحسین‌برانگیز است. وبلاگ‌ها زنده هستند و وبسایت سرعت بی‌نظیری دارد.'],
+            [1, $manga_id, 5, 'بهترین مانهواخوان تخصصی که تا حالا دیدم! دکمه آپدیت و پاکسازی کش وبسایت در پروفایل به شدت کاربردیه. ممنون از تلاش تیم.']
+        ];
+        foreach ($reviews_seed as $rev) {
+            $stmt_ins = $pdo->prepare("INSERT INTO mangata_reviews (user_id, manga_id, rating, review_text) VALUES (?, ?, ?, ?)");
+            $stmt_ins->execute($rev);
         }
     }
 

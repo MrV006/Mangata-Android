@@ -821,6 +821,66 @@ try {
             ]);
             break;
 
+        // ================= DYNAMIC BLOG & CRITIQUE REVIEWS SYSTEM =================
+        case 'blog/list':
+            $stmt = $pdo->query("SELECT * FROM mangata_blog ORDER BY id DESC");
+            $blogs = [];
+            while ($row = $stmt->fetch()) {
+                $blogs[] = [
+                    'id' => (int)$row['id'],
+                    'title' => $row['title'],
+                    'excerpt' => $row['excerpt'],
+                    'content' => $row['content'],
+                    'image_url' => $row['image_url'] ?: null,
+                    'created_at' => $row['created_at']
+                ];
+            }
+            api_send_success($blogs);
+            break;
+
+        case 'review/list':
+            $stmt = $pdo->query("
+                SELECT r.*, u.username, m.title as manga_title 
+                FROM mangata_reviews r 
+                JOIN mangata_users u ON r.user_id = u.id 
+                JOIN mangata_mangas m ON r.manga_id = m.id 
+                ORDER BY r.id DESC
+            ");
+            $reviews = [];
+            while ($row = $stmt->fetch()) {
+                $reviews[] = [
+                    'id' => (int)$row['id'],
+                    'user_id' => (int)$row['user_id'],
+                    'username' => $row['username'],
+                    'manga_id' => (int)$row['manga_id'],
+                    'manga_title' => $row['manga_title'],
+                    'rating' => (int)$row['rating'],
+                    'review_text' => $row['review_text'],
+                    'created_at' => $row['created_at']
+                ];
+            }
+            api_send_success($reviews);
+            break;
+
+        case 'review/create':
+            $user_id = isset($params['user_id']) ? (int)$params['user_id'] : 0;
+            $manga_id = isset($params['manga_id']) ? (int)$params['manga_id'] : 0;
+            $rating = isset($params['rating']) ? (int)$params['rating'] : 5;
+            $review_text = trim($params['review_text'] ?? '');
+
+            if ($user_id <= 0 || $manga_id <= 0 || empty($review_text)) {
+                api_send_error('پارامترهای معتبرسازی متنی نقد یا آیدی‌های متصل ناقص فرستاده شده است.');
+            }
+
+            $stmt = $pdo->prepare("INSERT INTO mangata_reviews (user_id, manga_id, rating, review_text) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$user_id, $manga_id, $rating, $review_text]);
+            
+            api_send_success([
+                'id' => $pdo->lastInsertId(),
+                'message' => 'نقد گرانبهای شما با موفقیت در دیتابیس با هماهنگی ۲ جانبه وب و اپ ثبت شد 💫'
+            ]);
+            break;
+
         case 'auth/update-profile-image':
             $user_id = isset($params['user_id']) ? (int)$params['user_id'] : 0;
             if ($user_id <= 0) {

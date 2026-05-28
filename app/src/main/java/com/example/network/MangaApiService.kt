@@ -100,4 +100,16 @@ interface MangaApiService {
     suspend fun chargeWallet(
         @Body request: Map<String, Int>
     ): ApiResponse<Map<String, String>>
+
+    // Dynamic Blog & Critique Reviews Endpoints
+    @GET("blog/list")
+    suspend fun getBlogs(): ApiResponse<List<BlogItem>>
+
+    @GET("review/list")
+    suspend fun getReviews(): ApiResponse<List<ReviewItem>>
+
+    @POST("review/create")
+    suspend fun createReview(
+        @Body request: Map<String, @JvmSuppressWildcards Any>
+    ): ApiResponse<Map<String, String>>
 }

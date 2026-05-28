@@ -49,6 +49,12 @@ class MangaViewModel(application: Application) : AndroidViewModel(application) {
     private val _walletBalance = MutableStateFlow<Int>(0)
     val walletBalance: StateFlow<Int> = _walletBalance.asStateFlow()
 
+    private val _blogs = MutableStateFlow<List<BlogItem>>(emptyList())
+    val blogs: StateFlow<List<BlogItem>> = _blogs.asStateFlow()
+
+    private val _reviews = MutableStateFlow<List<ReviewItem>>(emptyList())
+    val reviews: StateFlow<List<ReviewItem>> = _reviews.asStateFlow()
+
     init {
         // Load persist user session first
         viewModelScope.launch {
@@ -56,6 +62,8 @@ class MangaViewModel(application: Application) : AndroidViewModel(application) {
             checkActiveSession()
             fetchSettingsAndCheckUpdate()
             fetchManhwas()
+            fetchBlogs()
+            fetchReviews()
         }
     }
 
@@ -381,6 +389,41 @@ class MangaViewModel(application: Application) : AndroidViewModel(application) {
                 _successMessage.value = "🪙 شارژ موفقیت‌آمیز! کیف پول شما ۱۵,۰۰۰ تومان شارژ شد."
             } else {
                 _errorMessage.value = result.exceptionOrNull()?.message
+            }
+        }
+    }
+
+    // Dynamic Blog & Critique Reviews Flow
+    fun fetchBlogs() {
+        viewModelScope.launch {
+            val result = repository.getBlogs()
+            if (result.isSuccess) {
+                _blogs.value = result.getOrNull() ?: emptyList()
+            }
+        }
+    }
+
+    fun fetchReviews() {
+        viewModelScope.launch {
+            val result = repository.getReviews()
+            if (result.isSuccess) {
+                _reviews.value = result.getOrNull() ?: emptyList()
+            }
+        }
+    }
+
+    fun submitReview(mangaId: Int, rating: Int, reviewText: String) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            val result = repository.createReview(user.id, mangaId, rating, reviewText)
+            _isLoading.value = false
+            if (result.isSuccess) {
+                _successMessage.value = result.getOrNull()
+                fetchReviews() // Refresh list dynamically
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "خطا در ثبت نقد شما"
             }
         }
     }

@@ -339,6 +339,57 @@ if (isset($_POST['update_mangata_settings']) && is_admin()) {
     $admin_msg = '<div class="success-message">تنظیمات آپدیت اجباری و سیستم بازنشانی دیتای کش با موفقیت روی سرور ثبت و اعمال گردید.</div>';
 }
 
+// Handle submitting a manga review from any registered user
+if (isset($_POST['submit_manga_review']) && is_logged_in()) {
+    $m_id = (int)($_POST['review_manga_id'] ?? 0);
+    $rating = (int)($_POST['review_rating'] ?? 5);
+    $text = trim($_POST['review_text'] ?? '');
+
+    if ($m_id > 0 && !empty($text)) {
+        $stmt_ins_rev = $pdo->prepare("INSERT INTO mangata_reviews (user_id, manga_id, rating, review_text) VALUES (?, ?, ?, ?)");
+        $stmt_ins_rev->execute([$_SESSION['user_id'], $m_id, $rating, $text]);
+        $login_msg = '<div class="success-message">دیدگاه و نقد ارزشمند شما با موفقیت ثبت شد و به صورت زنده در صفحه اول به نمایش درآمد! 🌸</div>';
+    }
+}
+
+// Handle administrative blog creation
+if (isset($_POST['create_blog_web']) && is_admin()) {
+    $blog_title = trim($_POST['blog_title'] ?? '');
+    $blog_excerpt = trim($_POST['blog_excerpt'] ?? '');
+    $blog_content = trim($_POST['blog_content'] ?? '');
+    $blog_img = trim($_POST['blog_img'] ?? 'https://picsum.photos/600/400');
+
+    if (!empty($blog_title) && !empty($blog_content)) {
+        $stmt_bg = $pdo->prepare("INSERT INTO mangata_blog (title, excerpt, content, image_url) VALUES (?, ?, ?, ?)");
+        $stmt_bg->execute([$blog_title, $blog_excerpt, $blog_content, $blog_img]);
+        $admin_msg = '<div class="success-message">خبر / وبلاگ جدید با عنوان «' . htmlspecialchars($blog_title) . '» با موفقیت در سیستم آنلاین منتشر شد.</div>';
+    }
+}
+
+// Handle administrative blog edit/save
+if (isset($_POST['edit_blog_web']) && is_admin()) {
+    $blog_id = (int)($_POST['edit_blog_id'] ?? 0);
+    $blog_title = trim($_POST['blog_title'] ?? '');
+    $blog_excerpt = trim($_POST['blog_excerpt'] ?? '');
+    $blog_content = trim($_POST['blog_content'] ?? '');
+    $blog_img = trim($_POST['blog_img'] ?? '');
+
+    if ($blog_id > 0 && !empty($blog_title)) {
+        $stmt_ubg = $pdo->prepare("UPDATE mangata_blog SET title = ?, excerpt = ?, content = ?, image_url = ? WHERE id = ?");
+        $stmt_ubg->execute([$blog_title, $blog_excerpt, $blog_content, $blog_img, $blog_id]);
+        $admin_msg = '<div class="success-message">وبلاگ شماره ' . $blog_id . ' با موفقیت ویرایش و ذخیره شد.</div>';
+    }
+}
+
+// Handle administrative blog deletion
+if (isset($_POST['delete_blog_web']) && is_admin()) {
+    $blog_id = (int)($_POST['delete_blog_id'] ?? 0);
+    if ($blog_id > 0) {
+        $pdo->prepare("DELETE FROM mangata_blog WHERE id = ?")->execute([$blog_id]);
+        $admin_msg = '<div class="success-message" style="background:#b71c1c;">مطلب وبلاگی با موفقیت از پایگاه خبر حذف گردید.</div>';
+    }
+}
+
 // Fetch all mangas with dynamic searching and filtering
 $search = trim($_GET['search'] ?? '');
 $genre = trim($_GET['genre'] ?? '');
@@ -718,214 +769,374 @@ function executeForcedWebCacheRefresh() {
                                 <?php endforeach; ?>
                             </div>
                         <?php else: ?>
-                            <div style="text-align:center; padding:30px; border:1px dashed rgba(255,255,255,0.1); border-radius:8px; background:rgba(255,255,255,0.01);">
-                                <p style="color:#666; margin:0; font-size:13px;">هنوز هیچ مانهوایی را به نشانک‌های خود اضافه نکرده‌اید!</p>
-                                <a href="." style="color:#bb86fc; font-weight:bold; text-decoration:none; font-size:12px; display:inline-block; margin-top:8px;">برو به صفحه اصلی و انتخاب مانهوا ⭐</a>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <!-- Cache and System Sync System -->
-                    <div style="background:#111; padding:20px; border-radius:8px; border:1px solid #222; grid-column: 1 / -1;">
-                        <h3 style="color:#03dac6; margin-top:0; font-size:16px; border-bottom:1px solid #222; padding-bottom:8px;">🚀 مرکز مدیریت کش و همگام‌سازی سریع</h3>
-                        <p style="color:#aaa; font-size:12px; line-height:1.7; margin-bottom:15px;">اگر احساس می‌کنید اطلاعات سایت، مانهواها یا قالب وبسایت برای شما قدیمی است، با زدن دکمه زیر حافظه موقت (کش) سیستم به طور کامل و زنده بدون نیاز به خروج از حساب کاربری بازنشانی می‌شود.</p>
-                        <button onclick="triggerWebCacheRefresh()" class="btn" style="background:linear-gradient(135deg, #0288d1, #0097a7); color:#fff; font-weight:bold; border-radius:8px; padding:10px 20px; border:none; cursor:pointer;">🔄 بروزرسانی و بازنشانی حافظه کش وب‌سایت</button>
+                            <div style="text-align:center; padding:30px; border:1px dashed rgba(255,255,255,0.1); bor    <?php else: ?>
+        <!-- ==================== MAIN HOME RENDER ==================== -->
+        
+        <!-- 1. LIVE HERO HIGHLIGHT SLIDER (Automated & Highly Polished) -->
+        <?php
+        $slider_mangas = array_slice($mangas, 0, 3);
+        if (!empty($slider_mangas)):
+        ?>
+            <div style="position: relative; overflow: hidden; border-radius: 16px; min-height: 380px; background: #121016; border: 1px solid rgba(124,77,255,0.2); margin-bottom: 35px; box-shadow: 0 10px 40px rgba(0,0,0,0.6);" id="mangaHeroSlider">
+                <?php foreach ($slider_mangas as $idx => $sm): ?>
+                    <div class="hero-slide" data-index="<?php echo $idx; ?>" style="display: <?php echo $idx === 0 ? 'flex' : 'none'; ?>; flex-direction: column; justify-content: flex-end; position: absolute; top:0; left:0; width:100%; height:100%; box-sizing:border-box;">
+                        <!-- Blur cover backdrop -->
+                        <div style="position: absolute; top:0; left:0; width:100%; height:100%; background: url('<?php echo htmlspecialchars($sm['cover_image'] ?: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800'); ?>') center center / cover no-repeat; opacity: 0.18; filter: blur(20px); pointer-events:none; z-index:0;"></div>
+                        <!-- Gradient overlay -->
+                        <div style="position: absolute; top:0; left:0; width:100%; height:100%; background: linear-gradient(to top, rgba(12,10,15,0.95) 0%, rgba(12,10,15,0.4) 60%, rgba(12,10,15,0.1) 100%); z-index:1; pointer-events:none;"></div>
                         
-                        <script>
-                        function triggerWebCacheRefresh() {
-                            const reservedKeys = ['user_id', 'username', 'user_role', 'session_token'];
-                            const values = {};
-                            reservedKeys.forEach(k => {
-                                const val = localStorage.getItem(k);
-                                if (val) values[k] = val;
-                            });
-                            
-                            localStorage.clear();
-                            sessionStorage.clear();
-                            
-                            Object.keys(values).forEach(k => {
-                                localStorage.setItem(k, values[k]);
-                            });
-                            
-                            alert('تنظیمات و حافظه مرورگر شما با موفقیت به صورت زنده پاکسازی شد. تغییرات بارگذاری شدند!');
-                            window.location.reload(true);
-                        }
-                        </script>
+                        <!-- Slide Content wrapper -->
+                        <div style="position: relative; z-index: 2; padding: 40px 5%; display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap;">
+                            <img src="<?php echo htmlspecialchars($sm['cover_image'] ?: 'https://placehold.co/150x220'); ?>" style="width: 120px; height: 180px; object-fit: cover; border-radius: 12px; border: 2px solid #ff7597; box-shadow: 0 0 20px rgba(255,117,151,0.3);" />
+                            <div style="flex: 1; min-width: 260px;">
+                                <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                                    <span class="badge" style="background:#03dac6; color:#000;">🔥 برگزیده سردبیر</span>
+                                    <span class="badge" style="background:#7c4dff; color:#fff;">📅 سال: <?php echo htmlspecialchars($sm['release_year'] ?? '2026'); ?></span>
+                                </div>
+                                <h2 style="color:#fff; font-size: 28px; font-weight: 900; margin: 0 0 10px 0; text-shadow: 0 2px 10px rgba(0,0,0,0.5);"><?php echo htmlspecialchars($sm['title']); ?></h2>
+                                <p style="color:#bbb; font-size: 14px; line-height: 1.7; max-width: 700px; margin: 0 0 20px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;"><?php echo htmlspecialchars($sm['description']); ?></p>
+                                <a href="details.php?id=<?php echo $sm['id']; ?>" class="btn" style="padding: 10px 24px; border-radius: 8px; font-weight: bold;">شروع خوانش مانهوا 📖</a>
+                            </div>
+                        </div>
                     </div>
+                <?php endforeach; ?>
+                
+                <!-- Dot navigation pointers -->
+                <div style="position: absolute; bottom: 20px; left: 20px; z-index: 5; display: flex; gap: 8px;">
+                    <?php foreach ($slider_mangas as $idx => $sm): ?>
+                        <span class="slider-dot" onclick="setMangaSlide(<?php echo $idx; ?>)" style="width: 10px; height: 10px; border-radius: 50%; background: <?php echo $idx === 0 ? '#ff7597' : 'rgba(255,255,255,0.3)'; ?>; cursor: pointer; transition: background 0.3s;"></span>
+                    <?php endforeach; ?>
                 </div>
             </div>
-        </div>
+            
+            <script>
+            let currentSlideIndex = 0;
+            const totalSlides = <?php echo count($slider_mangas); ?>;
+            function setMangaSlide(idx) {
+                currentSlideIndex = idx;
+                document.querySelectorAll('.hero-slide').forEach((slide, i) => {
+                    slide.style.display = (i === idx) ? 'flex' : 'none';
+                });
+                document.querySelectorAll('.slider-dot').forEach((dot, i) => {
+                    dot.style.background = (i === idx) ? '#ff7597' : 'rgba(255,255,255,0.3)';
+                });
+            }
+            setInterval(() => {
+                if(totalSlides > 1) {
+                    currentSlideIndex = (currentSlideIndex + 1) % totalSlides;
+                    setMangaSlide(currentSlideIndex);
+                }
+            }, 5500);
+            </script>
+        <?php endif; ?>
 
-    <?php else: ?>
-        <!-- ==================== MAIN HOME RENDER ==================== -->
-        <!-- Hero Header -->
-        <div class="hero">
-            <h2 style="color:#ff7597; font-size: 32px; margin:0 0 15px 0;">قدرتمندترین پورتال اختصاصی و زنده مانگاتا</h2>
-            <p style="color:#ccc; font-size:16px; max-width: 800px; margin: 0 auto; line-height:1.7;">
-                از وردپرس خارج شدیم! اکنون با یک معماری فوق‌العاده سریع و اختصاصی PHP مجهز به پایگاه‌داده واقعی <code style="background:#000; padding:2px 8px; border-radius:4px; color:#bb86fc;">mrvir111_mangata_db</code> به صورت تمام سینک با اپلیکیشن اندروید در خدمت شماییم.
-            </p>
-        </div>
+        <?php echo $login_msg; ?>
+        <?php echo $upload_msg; ?>
+        <?php echo $admin_msg; ?>
 
-    <?php echo $login_msg; ?>
-    <?php echo $upload_msg; ?>
-    <?php echo $admin_msg; ?>
-
-    <!-- Active Manhwas Section -->
-    <h2 id="manhwa" style="color:#ff7597; margin-top:40px; border-bottom: 2px solid #ff7597; padding-bottom:10px;">🎨 مانهوا‌های در حال انتشار پلتفرم</h2>
-
-    <!-- Dynamic Advanced Search & Filter Bar -->
-    <div class="card" style="margin-bottom: 30px; border: 1px solid rgba(187,134,252,0.25); background: rgba(30, 27, 36, 0.65); backdrop-filter: blur(8px); padding: 20px; border-radius: 12px;">
-        <h3 style="color:#bb86fc; margin-top:0; font-size:16px; margin-bottom:15px; display:flex; align-items:center; gap:8px;">🔍 جستجوی پیشرفته و فیلتر مانهوا</h3>
-        <form action="" method="GET" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; background:transparent; padding:0; border:none; width:100%;">
-            <!-- Text Search Input -->
-            <div>
-                <label style="display:block; color:#aaa; font-size:12px; margin-bottom:5px;">کلمه کلیدی (عنوان، سازنده، خلاصه...)</label>
-                <input type="text" name="search" value="<?php echo htmlspecialchars($search); ?>" placeholder="مثال: بازگشت، جین وو، چوگونگ..." style="width:100%; padding:8px 12px; border:1px solid #333; border-radius:8px; background:#111; color:#fff; font-size:13px; box-sizing:border-box;">
+        <!-- 2. HORIZONTAL NEWEST WORKS CAROUSEL (With arrows < & >) -->
+        <div style="margin-bottom: 45px; position: relative;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 18px; border-bottom: 2px solid rgba(255,117,151,0.25); padding-bottom: 10px;">
+                <h2 style="color:#ff7597; margin:0; font-size: 20px; font-weight: 900; display:flex; align-items:center; gap:8px;">🔥 آخرین کارها که روی سایت میرن (کارهای جدید)</h2>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="scrollCarousel(-1)" class="btn btn-sm" style="background: rgba(124,77,255,0.2); border: 1px solid #7c4dff; padding: 6px 12px; color: #7c4dff; border-radius: 6px; cursor: pointer; height: 32px; display: flex; align-items: center; justify-content: center; font-weight:bold;">◀</button>
+                    <button onclick="scrollCarousel(1)" class="btn btn-sm" style="background: rgba(124,77,255,0.2); border: 1px solid #7c4dff; padding: 6px 12px; color: #7c4dff; border-radius: 6px; cursor: pointer; height: 32px; display: flex; align-items: center; justify-content: center; font-weight:bold;">▶</button>
+                </div>
             </div>
-            <!-- Genre Filter Input -->
-            <div>
-                <label style="display:block; color:#aaa; font-size:12px; margin-bottom:5px;">ژانر (اکشن، درام، کمدی...)</label>
-                <select name="genre" style="width:100%; padding:8px 12px; border:1px solid #333; border-radius:8px; background:#111; color:#fff; font-size:13px; box-sizing:border-box;">
-                    <option value="">همه ژانرها</option>
-                    <option value="اکشن" <?php echo $genre === 'اکشن' ? 'selected' : ''; ?>>اکشن</option>
-                    <option value="کمدی" <?php echo $genre === 'کمدی' ? 'selected' : ''; ?>>کمدی</option>
-                    <option value="درام" <?php echo $genre === 'درام' ? 'selected' : ''; ?>>درام</option>
-                    <option value="فانتزی" <?php echo $genre === 'فانتزی' ? 'selected' : ''; ?>>فانتزی</option>
-                    <option value="ماجراجویی" <?php echo $genre === 'ماجراجویی' ? 'selected' : ''; ?>>ماجراجویی</option>
-                    <option value="عاشقانه" <?php echo $genre === 'عاشقانه' ? 'selected' : ''; ?>>عاشقانه</option>
-                </select>
-            </div>
-            <!-- Release Year Filter Input -->
-            <div>
-                <label style="display:block; color:#aaa; font-size:12px; margin-bottom:5px;">سال انتشار</label>
-                <input type="text" name="year" value="<?php echo htmlspecialchars($year); ?>" placeholder="مثال: 2024" style="width:100%; padding:8px 12px; border:1px solid #333; border-radius:8px; background:#111; color:#fff; font-size:13px; box-sizing:border-box;">
-            </div>
-            <!-- Main character Filter Input -->
-            <div>
-                <label style="display:block; color:#aaa; font-size:12px; margin-bottom:5px;">بازیگر / شخصیت اصلی</label>
-                <input type="text" name="character" value="<?php echo htmlspecialchars($character); ?>" placeholder="مثال: سونگ ایل" style="width:100%; padding:8px 12px; border:1px solid #333; border-radius:8px; background:#111; color:#fff; font-size:13px; box-sizing:border-box;">
-            </div>
-            <!-- Buttons -->
-            <div style="display:flex; gap:10px; align-items:flex-end;">
-                <button type="submit" class="btn" style="background:#03dac6; color:#000; font-weight:bold; flex:1; height:38px; border-radius:8px;">جستجو 🚀</button>
-                <?php if (!empty($search) || !empty($genre) || !empty($year) || !empty($character)): ?>
-                    <a href="." class="btn" style="background:#b71c1c; color:#fff; text-decoration:none; text-align:center; flex:1; height:38px; line-height:38px; padding:0; display:block; border-radius:8px;">پاک کردن 🧹</a>
+            
+            <div id="mangaCarousel" style="display: flex; gap: 20px; overflow-x: auto; scroll-behavior: smooth; padding: 10px 0; scrollbar-width: none; -ms-overflow-style: none;">
+                <?php if (!empty($mangas)): ?>
+                    <?php foreach ($mangas as $cm): ?>
+                        <div style="flex: 0 0 240px; background: rgba(20,18,24,0.75); border-radius: 12px; border: 1px solid rgba(124,77,255,0.12); padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.3s, border-color 0.3s;" class="carousel-card">
+                            <div>
+                                <img src="<?php echo htmlspecialchars($cm['cover_image'] ?: 'https://placehold.co/240x330'); ?>" style="width: 100%; height: 260px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 12px;" />
+                                <h3 style="color:#fff; font-size: 15px; font-weight: 800; margin: 0 0 6px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><?php echo htmlspecialchars($cm['title']); ?></h3>
+                                <p style="color:#888; font-size: 11px; margin: 0 0 10px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><?php echo htmlspecialchars($cm['genres'] ?? 'بدون ژانر'); ?></p>
+                            </div>
+                            <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px;">
+                                <a href="details.php?id=<?php echo $cm['id']; ?>" class="btn btn-sm" style="background:#7c4dff; width:100%; text-align:center; padding: 6px; border-radius:6px; font-size: 11px; font-weight:bold;">مشاهده جزئیات کامل 👁️</a>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <p style="color:#666; font-size:13px; padding: 10px;">هیچ مانهوایی ثبت نشده است.</p>
                 <?php endif; ?>
             </div>
-        </form>
-    </div>
-
-    <!-- Beautiful Horizontal Scrollable Genre Navigation Row (Synced visually with Jetpack Compose app chips) -->
-    <div style="margin: 25px 0 15px 0;">
-        <h3 style="color:#03dac6; font-size:14px; margin-bottom:12px; font-weight:bold; display:flex; align-items:center; gap:8px;">🏷️ دسته‌بندی مانهواها براساس بیشترین لایک:</h3>
-        <div style="display:flex; gap:10px; overflow-x:auto; padding-bottom:8px; -webkit-overflow-scrolling:touch; scrollbar-width: none; -ms-overflow-style: none;">
-            <?php
-            $quick_genres = ["همه" => "", "اکشن" => "اکشن", "کمدی" => "کمدی", "درام" => "درام", "فانتزی" => "فانتزی", "ماجراجویی" => "ماجراجویی", "عاشقانه" => "عاشقانه"];
-            foreach ($quick_genres as $label => $val):
-                $active = ($val === $genre);
-                $link = "?genre=" . urlencode($val);
-                if (empty($val)) $link = ".";
-                $bg = $active ? "#bb86fc" : "rgba(30, 27, 36, 0.65)";
-                $color = $active ? "#000" : "#ccc";
-                $border = $active ? "1px solid #bb86fc" : "1px solid rgba(255,255,255,0.08)";
-            ?>
-                <a href="<?php echo $link; ?>" style="background:<?php echo $bg; ?>; color:<?php echo $color; ?>; border:<?php echo $border; ?>; padding:8px 16px; border-radius:50px; font-size:12px; font-weight:bold; text-decoration:none; white-space:nowrap; transition:all 0.2s;">
-                    <?php echo $label; ?>
-                </a>
-            <?php endforeach; ?>
+            
+            <script>
+            function scrollCarousel(dir) {
+                const carousel = document.getElementById('mangaCarousel');
+                const cardWidth = 260; 
+                carousel.scrollLeft += (dir * cardWidth);
+            }
+            </script>
         </div>
-    </div>
-    
-    <div class="manhwa-grid">
-        <?php if (!empty($mangas)): ?>
-            <?php foreach ($mangas as $m): ?>
-                <div class="card card-manga">
-                    <div>
-                        <?php 
-                        $cover = !empty($m['cover_image']) ? $m['cover_image'] : 'https://placehold.co/300x450/1e1e1e/7c4dff?text=No+Cover';
-                        ?>
-                        <a href="details.php?id=<?php echo $m['id']; ?>" style="text-decoration:none; display:block;">
-                            <img src="<?php echo htmlspecialchars($cover); ?>" style="width:100%; height:280px; object-fit:cover; border-radius:6px; margin-bottom:15px; border: 1px solid #333;" alt="<?php echo htmlspecialchars($m['title']); ?>">
-                            <h3 style="color:#ff7597; margin:0 0 10px 0; font-size:18px; font-weight:900;"><?php echo htmlspecialchars($m['title']); ?> 👁️</h3>
-                        </a>
-                        <p style="color:#aaa; font-size:13px; line-height: 1.6; margin-bottom:15px;"><?php echo htmlspecialchars($m['description']); ?></p>
-                    </div>
-                    
-                    <div style="margin-top:20px; border-top: 1px solid #2d2d2d; padding-top:12px;">
-                        <h4 style="color:#bb86fc; margin:0 0 12px 0; font-size:14px;">چپترهای فعال در ریدر:</h4>
-                        <?php
-                        $stmt_ch = $pdo->prepare("SELECT * FROM mangata_chapters WHERE manga_id = ? ORDER BY chapter_number ASC");
-                        $stmt_ch->execute([$m['id']]);
-                        $chaps = $stmt_ch->fetchAll();
 
-                        if (!empty($chaps)): ?>
-                            <div style="display:flex; flex-direction:column; gap:8px;">
-                                <?php foreach ($chaps as $c): ?>
-                                    <div style="background:#252525; padding:8px 12px; border-radius:6px; display:flex; justify-content:space-between; align-items:center;">
-                                        <span style="font-size:12px; font-weight:bold; color:#e0e0e0;">چپتر <?php echo (float)$c['chapter_number']; ?> - <?php echo htmlspecialchars($c['title']); ?></span>
-                                        <div style="display:flex; gap: 8px; align-items:center;">
-                                            <a href="reader.php?chapter_id=<?php echo $c['id']; ?>" class="btn btn-sm" style="padding: 4px 10px; font-size:11px; font-weight:bold; background:#7c4dff;">خوانش ریدر 👁️</a>
-                                            <?php if (is_admin()): ?>
-                                                <form action="" method="POST" style="margin:0; padding:0; display:inline; background:transparent; border:none;" onsubmit="return confirm('آیا از حذف دائم این چپتر مطمئن هستید؟');">
-                                                    <input type="hidden" name="delete_chapter_id" value="<?php echo $c['id']; ?>">
-                                                    <button type="submit" name="delete_chapter_web" class="btn btn-sm" style="padding: 4px 8px; font-size:11px; font-weight:bold; background:#b71c1c; color:#fff;">حذف 🗑️</button>
-                                                </form>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
+        <!-- 3. DISCOUNTS / PREMIUM PROMO CAMPAIGN (تخفیفات اعتبار سکه) -->
+        <?php
+        $promo_text = get_mangata_setting('promo_discount_text', '٪۳۰ تخفیف داغ بهارانه روی خرید بسته‌‌های اعتباری و طلایی ترجمه؛ تنها با کدرهگیری فعال: MANGATA30');
+        $promo_expiry = get_mangata_setting('promo_discount_expiry', '۱۴۰۵/۰۴/۱۵');
+        ?>
+        <div class="card" style="background: linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(217,119,6,0.05) 100%); border: 1px solid rgba(245,158,11,0.3); border-radius: 16px; padding: 22px; margin-bottom: 45px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 20px;">
+            <div style="flex: 2; min-width: 280px;">
+                <span style="background: #f59e0b; color: #000; font-size: 10px; font-weight: 900; padding: 3px 10px; border-radius: 30px; text-transform: uppercase;">🔥 جشنواره طلایی تخفیفات</span>
+                <h3 style="color:#ffd54f; margin: 10px 0 8px 0; font-size: 18px; font-weight: 900;"><?php echo htmlspecialchars($promo_text); ?></h3>
+                <p style="color:#aaa; font-size: 12px; margin:0;">مهلت استفاده از تخفیف کیف پول و خرید بسته‌ها: <strong style="color:#ff7597;"><?php echo htmlspecialchars($promo_expiry); ?></strong></p>
+            </div>
+            <div style="flex: 1; min-width: 180px; text-align: center;">
+                <div style="border: 2px dashed rgba(245,158,11,0.4); padding: 10px; border-radius: 8px; font-size: 15px; font-weight: bold; color: #ffd54f; background: rgba(0,0,0,0.2); font-family: monospace; letter-spacing: 1.5px; margin-bottom: 12px;">MANGATA30</div>
+                <a href="?page=profile" class="btn btn-sm" style="background:#f59e0b; color:#000; font-weight:900; width:100%;">ثبت اعتبار شارژ هدیه 🎁</a>
+            </div>
+        </div>
+
+        <!-- 4. LIVE BLOG / NEWS SECTION (وبلاگ یا اخبار) -->
+        <div style="margin-bottom: 45px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 18px; border-bottom: 2px solid rgba(3,218,198,0.25); padding-bottom: 10px;">
+                <h2 style="color:#03dac6; margin:0; font-size: 20px; font-weight: 900; display:flex; align-items:center; gap:8px;">📰 وبلاگ و آخرین اخبار دنیای مانهوا</h2>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+                <?php
+                $stmt_blog = $pdo->query("SELECT * FROM mangata_blog ORDER BY id DESC LIMIT 3");
+                $blogs = $stmt_blog->fetchAll();
+                foreach ($blogs as $bg):
+                ?>
+                    <div class="card" style="background: rgba(26,22,34,0.6); border: 1px solid rgba(187,134,252,0.12); border-radius: 12px; overflow: hidden; padding: 0; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div>
+                            <img src="<?php echo htmlspecialchars($bg['image_url'] ?: 'https://picsum.photos/600/400'); ?>" style="width: 100%; height: 160px; object-fit: cover; border-bottom: 1px solid rgba(255,255,255,0.06);" />
+                            <div style="padding: 18px;">
+                                <span style="font-size: 11px; color: #ff7597; font-weight: bold;"><?php echo htmlspecialchars($bg['created_at']); ?></span>
+                                <h3 style="color:#fff; font-size: 16px; font-weight: 800; margin: 6px 0 10px 0; line-height: 1.4;"><?php echo htmlspecialchars($bg['title']); ?></h3>
+                                <p style="color:#aaa; font-size: 12px; line-height: 1.6; margin: 0;"><?php echo htmlspecialchars($bg['excerpt']); ?></p>
                             </div>
-                        <?php else: ?>
-                            <span style="font-size:12px; color:#555;">هنوز چپتری برای این کار قرار نگرفته است.</span>
+                        </div>
+                        <div style="padding: 0 18px 18px 18px;">
+                            <button onclick="readFullBlog(<?php echo $bg['id']; ?>, '<?php echo addslashes(htmlspecialchars($bg['title'])); ?>', '<?php echo addslashes(htmlspecialchars($bg['content'])); ?>')" class="btn btn-sm" style="background:rgba(3,218,198,0.15); border:1px solid #03dac6; color:#03dac6; width:100%; font-weight:bold;">مشاهده متن کامل خبر 👁️</button>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            
+            <!-- Blog Details Modal -->
+            <div id="blogModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 8, 15, 0.95); z-index: 100000; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;">
+                <div style="background: #1e1b24; border: 1.5px solid #03dac6; max-width: 750px; width: 100%; border-radius: 14px; padding: 25px; box-shadow: 0 10px 30px rgba(3,218,198,0.25);">
+                    <h3 id="blogModalTitle" style="color: #03dac6; margin-top: 0; font-weight: 950; font-size: 20px; border-bottom: 1px solid #333; padding-bottom: 12px;">عنوان وبلاگ</h3>
+                    <div id="blogModalContent" style="color: #fff; font-size: 13.5px; line-height: 1.8; margin-bottom: 25px; max-height: 350px; overflow-y: auto; text-align: justify; padding-left: 10px;">محتوا</div>
+                    <div style="text-align: left;">
+                        <button onclick="closeBlogModal()" style="background: #e53935; color: white; border: none; padding: 8px 20px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: bold;">بستن 닫기</button>
+                    </div>
+                </div>
+            </div>
+            
+            <script>
+            function readFullBlog(id, title, text) {
+                document.getElementById('blogModalTitle').innerText = title;
+                document.getElementById('blogModalContent').innerHTML = text.replace(/\n/g, '<br>');
+                document.getElementById('blogModal').style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+            }
+            function closeBlogModal() {
+                document.getElementById('blogModal').style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+            </script>
+        </div>
+
+        <!-- 5. RECOMMENDED / SUGGESTED WORKS (کارهای پیشنهادی) -->
+        <div style="margin-bottom: 45px;">
+            <div style="border-bottom: 2px solid rgba(187,134,252,0.25); padding-bottom: 10px; margin-bottom: 18px;">
+                <h2 style="color:#bb86fc; margin:0; font-size: 20px; font-weight: 900; display:flex; align-items:center; gap:8px;">💫 کارهای پیشنهادی و اختصاصی تیم مدیریت</h2>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+                <?php
+                $suggested_mangas = array_slice($mangas, 0, 4);
+                if (!empty($suggested_mangas)):
+                    foreach ($suggested_mangas as $sm):
+                ?>
+                        <div style="background: rgba(30,27,36,0.65); border: 1px solid rgba(124,77,255,0.12); border-radius: 12px; padding: 15px; display:flex; gap:15px; align-items:flex-start; position: relative;">
+                            <span style="position: absolute; top: 10px; right: 10px; background: #e0a82e; color: black; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 4px;">⭐ پیشنهاد دبیر</span>
+                            <img src="<?php echo htmlspecialchars($sm['cover_image'] ?: 'https://placehold.co/120x170'); ?>" style="width: 80px; height: 110px; object-fit: cover; border-radius: 8px; border: 1px solid #444;" />
+                            <div style="flex:1;">
+                                <h3 style="color:#fff; font-size: 15px; font-weight: 800; margin: 0 0 5px 0;"><?php echo htmlspecialchars($sm['title']); ?></h3>
+                                <p style="color:#aaa; font-size: 11px; margin: 0 0 12px 0; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;"><?php echo htmlspecialchars($sm['description']); ?></p>
+                                <a href="details.php?id=<?php echo $sm['id']; ?>" style="color:#bb86fc; font-size:12px; font-weight:bold; text-decoration:none;">همین حالا بخوانید ◀</a>
+                            </div>
+                        </div>
+                <?php 
+                    endforeach;
+                else:
+                ?>
+                    <p style="color:#666; font-size:12px;">کارت ویژه‌ای آماده نشده است.</p>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- 6. TOP WORKS / BEST USERS OF THE MONTH (برترین کارها و بهترین اعضای ماه) -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-bottom: 45px;">
+            <!-- Column 1: Best Staff of the month -->
+            <div class="card" style="border-right: 4px solid #03dac6; background: rgba(18,16,22,0.8);">
+                <h3 style="color:#03dac6; font-weight:900; margin-top:0; font-size: 17px; margin-bottom:15px;">👤 کادر فنی و همکاران برتر ماه در رسانه</h3>
+                
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                    <div style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px;">
+                        <div style="background:#ff7597; color:black; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:11px;">مترجم</div>
+                        <div>
+                            <strong style="color:white; font-size:13px; display:block;">مترجم محبوب: amirreza</strong>
+                            <span style="color:#888; font-size:11px;">سرعت عمل عالی و ترجمه روان سولو لولینگ</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px;">
+                        <div style="background:#03dac6; color:black; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:11px;">طراح</div>
+                        <div>
+                            <strong style="color:white; font-size:13px; display:block;">تایپ‌ستر برتر: rezashaw</strong>
+                            <span style="color:#888; font-size:11px;">کلینر و طراح بازسازی بسیار تمیز مانهوای طلایی</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px;">
+                        <div style="background:#bb86fc; color:black; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:11px;">کادر</div>
+                        <div>
+                            <strong style="color:white; font-size:13px; display:block;">کلینر برتر: mangataclean</strong>
+                            <span style="color:#888; font-size:11px;">حذف دقیق حباب‌ها و همگام‌سازی آنی فصول</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Column 2: Best Works ranking -->
+            <div class="card" style="border-right: 4px solid #ff7597; background: rgba(18,16,22,0.8);">
+                <h3 style="color:#ff7597; font-weight:900; margin-top:0; font-size: 17px; margin-bottom:15px;">🏆 برترین مانهواهای ماه (بیشترین رضایت کاربری)</h3>
+                
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <?php
+                    $top_ranked = array_slice($mangas, 0, 3);
+                    foreach ($top_ranked as $rank => $tr):
+                    ?>
+                        <div style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.02); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.03);">
+                            <span style="font-size: 18px; font-weight:900; color:#ff7597;">#<?php echo $rank + 1; ?></span>
+                            <img src="<?php echo htmlspecialchars($tr['cover_image'] ?: 'https://placehold.co/60x80'); ?>" style="width: 40px; height: 50px; object-fit: cover; border-radius: 4px;" />
+                            <div style="flex:1;">
+                                <strong style="color:white; font-size:13px; display:block;"><?php echo htmlspecialchars($tr['title']); ?></strong>
+                                <span style="color:#888; font-size:11px;">ژانر: <?php echo htmlspecialchars($tr['genres'] ?? 'فانتزی'); ?></span>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. REAL INTERACTIVE REVIEWS & COMMENTS CENTER (نقدها و تحلیل‌های زنده) -->
+        <div class="card" style="background: rgba(18,16,22,0.7); border: 1.5px solid rgba(3,218,198,0.25); border-radius: 16px; padding: 24px; margin-bottom: 45px;">
+            <h2 style="color:#03dac6; margin-top:0; font-size: 20px; font-weight: 950; display:flex; align-items:center; gap:8px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom:12px; margin-bottom: 20px;">💬 نقدها، دیدگاه‌ها و تحلیل‌های زنده کاربران</h2>
+            
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 30px;" class="panel-flex">
+                <!-- Fetch and Display reviews list -->
+                <div>
+                    <h3 style="color:#ff7597; font-size: 15px; font-weight: 800; margin-top:0; margin-bottom:15px;">کریدور نقد داستان و کیفیت تیم ترجمه:</h3>
+                    
+                    <div style="display:flex; flex-direction:column; gap:15px; max-height: 380px; overflow-y:auto; padding-left:10px;">
+                        <?php
+                        // Fetch real dynamically synced reviews
+                        $stmt_all_rev = $pdo->query("
+                            SELECT r.*, u.username, m.title as manga_title 
+                            FROM mangata_reviews r 
+                            JOIN mangata_users u ON r.user_id = u.id 
+                            JOIN mangata_mangas m ON r.manga_id = m.id 
+                            ORDER BY r.id DESC
+                        ");
+                        $reviews = $stmt_all_rev->fetchAll();
+                        
+                        if (!empty($reviews)):
+                            foreach ($reviews as $rv):
+                        ?>
+                                <div style="background:rgba(255,255,255,0.02); padding:15px; border-radius:10px; border:1px solid rgba(255,255,255,0.04);">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                        <strong style="color:#bb86fc; font-size:13px;">👤 @<?php echo htmlspecialchars($rv['username']); ?></strong>
+                                        <span style="color:#ffd54f; font-size:12px; font-weight:bold;"><?php echo str_repeat('⭐', (int)$rv['rating']); ?></span>
+                                    </div>
+                                    <div style="font-size:11px; color:#aaa; margin-bottom:8px;">درباره اثر: <strong style="color:#ff7597;"><?php echo htmlspecialchars($rv['manga_title']); ?></strong></div>
+                                    <p style="color:#efefef; font-size:12px; line-height:1.6; margin:0;"><?php echo htmlspecialchars($rv['review_text']); ?></p>
+                                </div>
+                        <?php 
+                            endforeach;
+                        else:
+                        ?>
+                            <p style="color:#666; font-size:12px;">تاکنون نقدی در دیتابیس تحلیل ثبت نشده است.</p>
                         <?php endif; ?>
                     </div>
                 </div>
-            <?php endforeach; ?>
-        <?php else: ?>
-            <div class="card" style="grid-column: 1 / -1; text-align:center; padding: 40px;">
-                <p style="color:#666; margin:0; font-size: 16px;">هنوز هیچ مانهوایی به همراه دیتابیس ثبت نشده است.</p>
+                
+                <!-- Submit custom critique review form -->
+                <div style="background:#131118; padding:20px; border-radius:12px; border:1px solid rgba(255,255,255,0.04);">
+                    <h3 style="color:#03dac6; font-size: 15px; font-weight: 800; margin-top:0; margin-bottom:15px;">➕ ثبت نقد و دیدگاه و نمره‌دهی زنده</h3>
+                    <form action="" method="POST" style="background:transparent; padding:0; border:none; display:flex; flex-direction:column; gap:12px; margin:0;">
+                        <div>
+                            <label style="font-size:12px; color:#aaa; display:block; margin-bottom:5px;">انتخاب اثر ثبت شده:</label>
+                            <select name="review_manga_id" required style="width:100%; padding:8px; border-radius:6px; background:#222; color:#fff; font-size:12px; margin:0; border:1px solid #333;">
+                                <?php foreach ($mangas as $man_rev): ?>
+                                    <option value="<?php echo $man_rev['id']; ?>"><?php echo htmlspecialchars($man_rev['title']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:12px; color:#aaa; display:block; margin-bottom:5px;">رتبه رضایت شما:</label>
+                            <select name="review_rating" style="width:100%; padding:8px; border-radius:6px; background:#222; color:#fff; font-size:12px; margin:0; border:1px solid #333;">
+                                <option value="5">⭐⭐⭐⭐⭐ بی نظیر عالی</option>
+                                <option value="4">⭐⭐⭐⭐ خوب و خواندنی</option>
+                                <option value="3">⭐⭐⭐ متوسط</option>
+                                <option value="2">⭐⭐ ضعیف</option>
+                                <option value="1">⭐ بسیار بد</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:12px; color:#aaa; display:block; margin-bottom:5px;">متن دیدگاه یا نقد تحلیلی:</label>
+                            <textarea name="review_text" required placeholder="توضیحات معرفی و نقد شما درباره کار..." style="width:100%; height:80px; padding:8px; border-radius:6px; background:#222; color:#fff; font-size:12px; margin:0; border:1px solid #333; font-family:inherit;"></textarea>
+                        </div>
+                        <button type="submit" name="submit_manga_review" class="btn btn-sm" style="background:#03dac6; color:#000; font-weight:bold; width:100%; margin-top:5px; padding:10px;">ثبت زنده دیدگاه در پورتال 🚀</button>
+                    </form>
+                </div>
             </div>
-        <?php endif; ?>
-    </div>
+        </div>
 
-    <!-- Dual Layout: Recruitment Portal & Control Auth Desk -->
-    <div class="panel-flex" style="margin-top:40px;">
-        
-        <!-- Recruitment Form -->
-        <div id="recruitment" class="card" style="border-right: 5px solid #ff7597; background: #1a1a1a;">
-            <h2 style="color:#ff7597; margin-top:0;">🤝 استخدام در تیم ترجمه و طراحی مانگاتا</h2>
-            <p style="color:#b3b3b3; font-size:14px; line-height:1.7; margin-bottom:20px;">
-                امتحان‌های ورودی بلافاصله با اپلیکیشن و حساب‌های سرور یکپارچه می‌شوند. با پر کردن فرم زیر یک حساب کاربری برای شما ثبت گردیده که با آن قادر خواهید بود وارد اپلیکیشن اندروید شده و کار در تیم ترجمه، طراحی، کلینری یا تایپ را شروع کنید.
-            </p>
-
-            <form action="#recruitment" method="POST" enctype="multipart/form-data" style="background:#252525; padding: 25px; border-radius:8px; border:1px solid #333;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap:15px;">
+        <!-- 8. RECRUITMENT DESK (محل عضویت داوطلبین همکار) -->
+        <div id="recruitment" class="card" style="border:1.5px solid rgba(255,117,151,0.3); background:#1a191f; border-radius:16px; padding:30px; margin-bottom:45px;">
+            <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 15px;">
+                <div style="font-size:40px;">🤝</div>
+                <div>
+                    <h2 style="color:#ff7597; margin:0; font-size:22px; font-weight:950;">استخدام کادر فنی مانهواخوان مانگاتا (MANGATA)</h2>
+                    <p style="color:#aaa; font-size:12.5px; margin:4px 0 0 0;">آزمون‌های بررسی زنده آنلاین؛ ارتقاء آنی نقش‌های دسترسی و تخصیص پروژه</p>
+                </div>
+            </div>
+            
+            <p style="color:#ccc; font-size:13.5px; line-height:1.7; margin-bottom:25px;">ما در مانگاتا همواره به دنبال جذب استعدادهای عالی کشور برای ترجمه و ادیت مانهواها به صورت همگام با دیتابیس واقعی هستیم. پس از پر کردن فرم استخدامی زیر، سیستم یک حساب کاربری برای شما باز کرده و کادر مرکزی پاسخ امتحان را تصحیح و نقش همکاری شما را به صورت زنده ارتقا خواهد داد.</p>
+            
+            <form action="#recruitment" method="POST" enctype="multipart/form-data" style="background:#111; padding: 25px; border-radius:12px; border:1px solid rgba(255,255,255,0.04); display: flex; flex-direction:column; gap: 15px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:15px;">
                     <div>
-                        <label style="font-weight:bold; font-size:13px; color:#bb86fc; display:block; margin-bottom:5px;">نام کاربری انتخابی:</label>
-                        <input type="text" name="applicant_username" placeholder="نام انگلیسی (مثلاً amirreza)" required style="margin:0;">
+                        <label style="font-weight:bold; font-size:12.5px; color:#bb86fc; display:block; margin-bottom:6px;">نام کاربری انتخابی لاتین:</label>
+                        <input type="text" name="applicant_username" placeholder="مثلاً: miladtrans" required style="margin:0; padding:10px; background:#1e1a24; border:1px solid #333; border-radius:8px;">
                     </div>
                     <div>
-                        <label style="font-weight:bold; font-size:13px; color:#bb86fc; display:block; margin-bottom:5px;">آدرس ایمیل:</label>
-                        <input type="email" name="applicant_email" placeholder="applicant@example.com" required style="margin:0;">
+                        <label style="font-weight:bold; font-size:12.5px; color:#bb86fc; display:block; margin-bottom:6px;">آدرس ایمیل متقاضی:</label>
+                        <input type="email" name="applicant_email" placeholder="example@mr-v.ir" required style="margin:0; padding:10px; background:#1e1a24; border:1px solid #333; border-radius:8px;">
+                    </div>
+                    <div>
+                        <label style="font-weight:bold; font-size:12.5px; color:#bb86fc; display:block; margin-bottom:6px;">کلمه عبور ورود به سیستم:</label>
+                        <input type="password" name="applicant_password" placeholder="کلمه‌عبور مناسب" required style="margin:0; padding:10px; background:#1e1a24; border:1px solid #333; border-radius:8px;">
                     </div>
                 </div>
 
-                <div style="margin-top:15px;">
-                    <label style="font-weight:bold; font-size:13px; color:#bb86fc; display:block; margin-bottom:5px;">رمز ورود به پنل و اپلیکیشن:</label>
-                    <input type="password" name="applicant_password" placeholder="کلمه‌عبور ایمن" required style="margin:0;">
+                <div style="margin-top:10px;">
+                    <label style="font-weight:bold; font-size:12.5px; color:#bb86fc; display:block; margin-bottom:6px;">فایل فشرده پاسخ آزمون استخدامی (PDF / ZIP / RAR / PNG):</label>
+                    <input type="file" name="exam_file" required style="background:transparent; border:none; padding:10px 0; margin:0; color:#fff;">
                 </div>
 
-                <div style="margin-top:15px;">
-                    <label style="font-weight:bold; font-size:13px; color:#bb86fc; display:block; margin-bottom:5px;">فایل پاسخ آزمون استخدامی (PDF, ZIP, PNG):</label>
-                    <input type="file" name="exam_file" required style="background:transparent; border:none; padding:0; margin:0;">
-                </div>
-
-                <button type="submit" name="submit_exam" class="btn" style="width:100%; margin-top:20px; font-weight:bold; background: linear-gradient(135deg, #6200ee, #7c4dff); box-shadow: 0 4px 10px rgba(98,0,238,0.4);">ارسال و ثبت اطلاعات آزمون متقاضی</button>
+                <button type="submit" name="submit_exam" class="btn" style="width:100%; margin-top:15px; font-weight:bold; background: linear-gradient(135deg, #6200ee, #7c4dff); box-shadow: 0 4px 15px rgba(98,0,238,0.35); padding:12px;">ارسال مدارک استخدامی در دیتابیس مانگاتا ⚙️</button>
             </form>
         </div>
 
-        <!-- Auth Terminal or User panel -->
-        <div id="auth" class="card" style="border: 2px solid rgba(3,218,198,0.25); background: linear-gradient(145deg, rgba(20,18,24,0.85) 0%, rgba(13,10,18,0.95) 100%); backdrop-filter: blur(15px); box-shadow: 0 10px 40px rgba(3,218,198,0.12), inset 0 0 20px rgba(3,218,198,0.02); transition: all 0.3s ease;">
+        <!-- 9. AUTHENTIC TERMINAL GATEWAY PANEL -->
+        <div id="auth" class="card" style="border: 2px solid rgba(3,218,198,0.25); background: linear-gradient(145deg, rgba(20,18,24,0.85) 0%, rgba(13,10,18,0.95) 100%); backdrop-filter: blur(15px); box-shadow: 0 10px 40px rgba(3,218,198,0.12), inset 0 0 20px rgba(3,218,198,0.02); transition: all 0.3s ease; margin-bottom: 45px;">
             <?php if (!is_logged_in()): ?>
                 <div style="text-align: center; margin-bottom: 22px;">
                     <div style="display: inline-flex; align-items: center; justify-content: center; width: 54px; height: 54px; border-radius: 14px; background: rgba(3,218,198,0.1); margin-bottom: 12px; color: #03dac6; border: 1px solid rgba(3,218,198,0.2);">
@@ -933,6 +1144,47 @@ function executeForcedWebCacheRefresh() {
                     </div>
                     <h2 style="color:#03dac6; margin:0 0 4px 0; font-size:22px; font-weight:800; text-shadow:0 0 10px rgba(3,218,198,0.25);">ورود به پایگاه فرماندهی</h2>
                     <p style="color:#aaa; font-size:12px; margin:0;">پورتال یکپارچه مدیریت آثار، تخصیص کادر و تصحیح آزمون‌ها</p>
+                </div>
+                
+                <form action="#auth" method="POST" style="display:flex; flex-direction:column; gap:14px;">
+                    <div>
+                        <label style="font-size:12px; color:#03dac6; font-weight:800; display:block; margin-bottom:6px;">شناسه کاربری یا آدرسه ایمیل:</label>
+                        <input type="text" name="username" placeholder="Username or email" required style="margin:0; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 14px; transition:all 0.3s;">
+                    </div>
+
+                    <div>
+                        <label style="font-size:12px; color:#03dac6; font-weight:800; display:block; margin-bottom:6px;">رمز عبور یکپارچه:</label>
+                        <input type="password" name="password" placeholder="••••••••" required style="margin:0; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 14px; transition:all 0.3s;">
+                    </div>
+
+                    <button type="submit" name="web_login" class="btn" style="width:100%; padding:13px; margin-top:8px; border-radius:12px; background:linear-gradient(135deg, #03dac6, #018786); color:#000; font-weight:900; letter-spacing:0.2px; font-size:14px; box-shadow:0 4px 15px rgba(3,218,198,0.3); transition:all 0.3s;">ورود امن به پنل مرکزی</button>
+                </form>
+                <div style="margin-top:18px; padding:12px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px dashed rgba(255,255,255,0.06); font-size:11px; text-align:center; color:#777; line-height:1.6;">
+                    اکانت مدیر پیش‌فرض جهت ورود:<br>
+                    نام کاربری: <code style="color:#03dac6; font-weight:bold;">admin</code> | رمزعبور: <code style="color:#03dac6; font-weight:bold;">admin123</code>
+                </div>
+            <?php else: ?>
+                <div style="text-align: center; margin-bottom: 18px;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; width: 54px; height: 54px; border-radius: 14px; background: rgba(3,218,198,0.1); margin-bottom: 12px; color: #03dac6;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </div>
+                    <h2 style="color:#03dac6; margin:0 0 4px 0; font-size: 20px; font-weight: bold;">👤 حساب من فعال است</h2>
+                    <p style="color:#888; font-size: 11px; margin:0;">شما با موفقیت به پایگاه داده متصل شدید</p>
+                </div>
+                <div style="background: rgba(255,255,255,0.02); padding:16px; border-radius:12px; border:1px solid rgba(255,255,255,0.06); margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display:flex; justify-content:space-between; font-size: 13px;"><span style="color:#888;">کاربر جاری:</span><strong style="color:#fff;"><?php echo htmlspecialchars($_SESSION['username']); ?></strong></div>
+                    <div style="display:flex; justify-content:space-between; font-size: 13px;"><span style="color:#888;">نقش دسترسی:</span><strong style="color:#03dac6;"><?php echo htmlspecialchars($_SESSION['user_role'] === 'administrator' ? 'مدیریت کل' : 'مترجم/همکار'); ?></strong></div>
+                </div>
+                <div style="font-size: 10px; color:#03dac6; text-align:center; padding: 6px; border-radius: 6px; border: 1px solid rgba(3,218,198,0.1); background: rgba(3,218,198,0.05);" class="font-bold">
+                    ⚡ نشست فعال و کنترل دوجانبه مستقیم برقرار است
+                </div>
+            <?php endif; ?>
+        </div>
+
+    <?php endif; ?>
+
+    <!-- Administrative Operations Command Console (SUPER ADMIN ONLY) -->
+    <?php if (is_admin()): ?>حیح آزمون‌ها</p>
                 </div>
                 
                 <form action="#auth" method="POST" style="display:flex; flex-direction:column; gap:14px;">
@@ -1203,6 +1455,86 @@ function executeForcedWebCacheRefresh() {
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Administrative Blog Management Panel -->
+            <h3 style="color:#ff5722; margin-top:40px; margin-bottom:15px; font-size:18px;">📰 مدیریت اخبار و مقالات وبلاگ:</h3>
+            <p style="color:#aaa; font-size:12px; margin-bottom:15px;">در این بخش به عنوان مدیریت کل می‌توانید اخبار و مقالات زنده وبلاگ صفحه نخست را ایجاد، ویرایش یا حذف کامل کنید.</p>
+            
+            <div style="display:grid; grid-template-columns: 1fr; gap:25px;" class="panel-flex">
+                <!-- Create Blog Post form -->
+                <div style="background:#201c24; padding:20px; border-radius:12px; border:1px solid rgba(187,134,252,0.2);">
+                    <h4 style="color:#bb86fc; margin-top:0; font-size:14px; border-bottom:1px solid #333; padding-bottom:8px;">➕ منتشر کردن مطلب جدید وبلاگی</h4>
+                    <form action="" method="POST" style="background:transparent; padding:0; border:none; display:flex; flex-direction:column; gap:10px;">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                            <div>
+                                <label style="display:block; font-size:11px; color:#aaa; margin-bottom:4px;">عنوان مقاله / خبر مانهوا:</label>
+                                <input type="text" name="blog_title" required placeholder="مثال: مانهوای تک‌رو فصل ۳ کلید خورد!" style="margin:0; padding:8px;">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size:11px; color:#aaa; margin-bottom:4px;">آدرس تصویر شاخص (Image URL):</label>
+                                <input type="text" name="blog_img" placeholder="https://picsum.photos/600/400" style="margin:0; padding:8px;">
+                            </div>
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:11px; color:#aaa; margin-bottom:4px;">گزیده کوتاه خبر (Excerpt):</label>
+                            <input type="text" name="blog_excerpt" required placeholder="توضیح بسیار کوتاه جهت نمایش سریع در کارت خانه..." style="margin:0; padding:8px;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:11px; color:#aaa; margin-bottom:4px;">متن کامل مقاله وبلاگ:</label>
+                            <textarea name="blog_content" required placeholder="متن کامل و مفصل خبر به زبان فارسی روان..." style="margin:0; height:120px; padding:8px; font-family:inherit;"></textarea>
+                        </div>
+                        <button type="submit" name="create_blog_web" class="btn btn-sm" style="background:#03dac6; color:#000; font-weight:bold; padding:10px; width:100%;">انتشار زنده خبر در وبلاگ 🚀</button>
+                    </form>
+                </div>
+
+                <!-- Existing Blogs List with Edit/Delete capabilities -->
+                <div style="background:#201c24; padding:20px; border-radius:12px; border:1px solid rgba(187,134,252,0.2);">
+                    <h4 style="color:#03dac6; margin-top:0; font-size:14px; border-bottom:1px solid #333; padding-bottom:8px;">📋 مقالات فعال و زنده موجود بر روی پایگاه داده</h4>
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>شناسه</th>
+                                    <th>عنوان خبر و تصویر</th>
+                                    <th>خلاصه گزیده</th>
+                                    <th>عملیات ویرایش و حذف زنده</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php
+                                $stmt_all_bg = $pdo->query("SELECT * FROM mangata_blog ORDER BY id DESC");
+                                $all_bg_posts = $stmt_all_bg->fetchAll();
+                                foreach ($all_bg_posts as $p):
+                                ?>
+                                    <tr>
+                                        <td><code><?php echo $p['id']; ?></code></td>
+                                        <td>
+                                            <form action="" method="POST" style="margin:0; padding:0; background:transparent; border:none; display:contents;">
+                                                <input type="hidden" name="edit_blog_id" value="<?php echo $p['id']; ?>">
+                                                <input type="text" name="blog_title" value="<?php echo htmlspecialchars($p['title']); ?>" required style="margin-bottom:6px; padding:6px; font-size:11px; width:100%;">
+                                                <input type="text" name="blog_img" value="<?php echo htmlspecialchars($p['image_url']); ?>" placeholder="لینک تصویر" style="padding:6px; font-size:11px; width:100%;">
+                                        </td>
+                                        <td>
+                                            <input type="text" name="blog_excerpt" value="<?php echo htmlspecialchars($p['excerpt']); ?>" required style="margin-bottom:6px; padding:6px; font-size:11px; width:100%;">
+                                            <textarea name="blog_content" required class="form-control" style="width:100%; height:80px; padding:6px; font-size:11px; font-family:inherit; background:#111; color:#fff; border:1px solid #333; border-radius:4px; box-sizing:border-box;"><?php echo htmlspecialchars($p['content']); ?></textarea>
+                                        </td>
+                                        <td>
+                                            <div style="display:flex; flex-direction:column; gap:6px; justify-content:center; align-items:center;">
+                                                <button type="submit" name="edit_blog_web" class="btn btn-sm" style="background:#4caf50; font-weight:bold; width:100%; font-size:10px; padding:5px;">ذخیره 💾</button>
+                                            </form>
+                                            <form action="" method="POST" style="margin:0; padding:0; background:transparent; border:none; width:100%;" onsubmit="return confirm('آیا از حذف دائم این مقاله اطمینان دارید؟');">
+                                                <input type="hidden" name="delete_blog_id" value="<?php echo $p['id']; ?>">
+                                                <button type="submit" name="delete_blog_web" class="btn btn-sm" style="background:#b71c1c; font-weight:bold; width:100%; font-size:10px; padding:5px;">حذف 🗑️</button>
+                                            </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <!-- Manage Force Updates Panel -->

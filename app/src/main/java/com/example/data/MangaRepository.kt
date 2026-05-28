@@ -392,4 +392,50 @@ class MangaRepository(private val db: MangaDatabase) {
             Result.failure(e)
         }
     }
+
+    // Dynamic Blog & Critique Reviews Repository API Interactions
+    suspend fun getBlogs(): Result<List<BlogItem>> {
+        return try {
+            val response = api.getBlogs()
+            if (response.status == "success" && response.data != null) {
+                Result.success(response.data)
+            } else {
+                Result.failure(Exception(response.message ?: "دریافت وبلاگ با شکست مواجه شد."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getReviews(): Result<List<ReviewItem>> {
+        return try {
+            val response = api.getReviews()
+            if (response.status == "success" && response.data != null) {
+                Result.success(response.data)
+            } else {
+                Result.failure(Exception(response.message ?: "دریافت نظرات با شکست مواجه شد."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun createReview(userId: Int, mangaId: Int, rating: Int, text: String): Result<String> {
+        return try {
+            val payload = mapOf(
+                "user_id" to userId,
+                "manga_id" to mangaId,
+                "rating" to rating,
+                "review_text" to text
+            )
+            val response = api.createReview(payload)
+            if (response.status == "success") {
+                Result.success(response.message ?: "دیدگاه نقد داستان شما در دیتابیس ثبت شد.")
+            } else {
+                Result.failure(Exception(response.message ?: "خطا در ثبت دیدگاه نقد داستان"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
